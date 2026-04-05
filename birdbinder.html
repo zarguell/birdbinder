@@ -1,0 +1,2779 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BirdBinder - Nature Card Binder</title>
+  <style>
+    :root {
+      --bg: #050811;
+      --bg-elevated: #0b1020;
+      --bg-softer: #101629;
+      --accent: #9fd26a;
+      --accent-soft: rgba(159,210,106,0.16);
+      --accent-strong: #c3ff81;
+      --accent-gold: #f7d477;
+      --danger: #ff6b6b;
+      --text-main: #f6f7fb;
+      --text-muted: #a4adc4;
+      --border-subtle: rgba(255,255,255,0.06);
+      --card-radius: 18px;
+      --shadow-soft: 0 18px 45px rgba(0,0,0,0.55);
+      --shadow-subtle: 0 8px 20px rgba(0,0,0,0.35);
+      --transition-fast: 150ms ease-out;
+      --transition-med: 220ms ease-out;
+      --binder-green: #4bc48d;
+      --binder-blue: #5db2ff;
+      --binder-amber: #ffb347;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #192649 0, #050811 48%);
+      color: var(--text-main);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app-shell {
+      min-height: 100vh;
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      padding: 0 12px 18px;
+    }
+
+    header.app-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 12px 4px 8px;
+      background: linear-gradient(to bottom, rgba(5,8,17,0.97), rgba(5,8,17,0.86));
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      background: conic-gradient(from 210deg, #9fd26a, #5db2ff, #f7d477, #9fd26a);
+      padding: 2px;
+      box-shadow: 0 0 18px rgba(181,238,118,0.6);
+    }
+
+    .brand-avatar-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: radial-gradient(circle at 20% 0, rgba(255,255,255,0.18), transparent 48%),
+                  radial-gradient(circle at 80% 100%, rgba(0,0,0,0.7), #050811 58%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-strong);
+      font-weight: 700;
+      font-size: 17px;
+      letter-spacing: 0.6px;
+    }
+
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand-title {
+      font-weight: 630;
+      font-size: 18px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-pill {
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      padding: 6px 12px;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: radial-gradient(circle at top, rgba(214,255,173,0.1), rgba(13,18,35,0.96));
+      color: var(--text-main);
+      cursor: pointer;
+      outline: none;
+      transition: background var(--transition-fast), border-color var(--transition-fast), transform 80ms ease-out, box-shadow 80ms ease-out;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.4);
+    }
+
+    .btn-pill span.icon {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .btn-pill.primary {
+      border-color: rgba(159,210,106,0.9);
+      background: radial-gradient(circle at top left, rgba(205,255,172,0.32), rgba(22,30,56,0.98));
+      box-shadow: 0 12px 30px rgba(152,219,93,0.52);
+    }
+
+    .btn-pill:active {
+      transform: translateY(1px) scale(0.99);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    }
+
+    .btn-pill.primary:active {
+      box-shadow: 0 6px 18px rgba(152,219,93,0.6);
+    }
+
+    .view-root {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding-top: 10px;
+      gap: 12px;
+    }
+
+    .screen {
+      display: none;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .cluster {
+      background: radial-gradient(circle at top left, rgba(205,255,172,0.11), rgba(9,11,26,0.98));
+      border-radius: 22px;
+      padding: 14px 14px 16px;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .cluster-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .cluster-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .cluster-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 4px 9px;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: radial-gradient(circle at top, rgba(255,255,255,0.04), rgba(10,13,26,0.96));
+    }
+
+    .chip-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(159,210,106,0.8);
+    }
+
+    .primary-cta {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .hero-headline {
+      font-size: 22px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      margin-bottom: 4px;
+    }
+
+    .hero-highlight {
+      color: var(--accent-strong);
+    }
+
+    .hero-body {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 540px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .metric-card {
+      flex: 1;
+      border-radius: 16px;
+      padding: 10px 10px 12px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.03), rgba(6,8,18,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 620;
+    }
+
+    .metric-pill {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--accent-strong);
+    }
+
+    .progress-track {
+      position: relative;
+      width: 100%;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #9fd26a, #f7d477);
+      transform-origin: left;
+      transform: scaleX(0);
+      transition: transform 280ms ease-out;
+    }
+
+    .recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .recent-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 8px;
+      border-radius: 14px;
+      background: radial-gradient(circle at top left, rgba(255,255,255,0.04), rgba(8,11,24,0.98));
+      border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+    }
+
+    .recent-item:active {
+      transform: translateY(1px) scale(0.99);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.5);
+    }
+
+    .recent-thumb {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .recent-thumb::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(0,0,0,0.0), rgba(0,0,0,0.4));
+    }
+
+    .recent-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .recent-title {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .recent-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .badge-pill {
+      font-size: 10px;
+      border-radius: 999px;
+      padding: 3px 7px;
+      border: 1px solid rgba(255,255,255,0.16);
+      color: var(--accent-strong);
+      background: radial-gradient(circle at top, rgba(159,210,106,0.16), rgba(13,18,35,0.96));
+    }
+
+    .achievements-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      margin-top: 6px;
+    }
+
+    .badge-card {
+      min-width: 120px;
+      border-radius: 18px;
+      padding: 8px 9px 10px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.06), rgba(6,8,18,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+    }
+
+    .badge-card.locked {
+      opacity: 0.36;
+    }
+
+    .badge-icon {
+      font-size: 16px;
+    }
+
+    .badge-name {
+      font-weight: 600;
+    }
+
+    .badge-desc {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      border-radius: 999px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.06), rgba(8,11,24,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .tab-chip {
+      flex: 1;
+      padding: 6px 6px;
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform 80ms ease-out;
+    }
+
+    .tab-chip.active {
+      background: radial-gradient(circle at top left, rgba(205,255,172,0.25), rgba(9,13,29,0.96));
+      color: var(--text-main);
+      box-shadow: 0 10px 24px rgba(144,219,90,0.5);
+    }
+
+    .tab-chip:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: 0 5px 12px rgba(0,0,0,0.6);
+    }
+
+    .flow-section-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      margin-top: 6px;
+    }
+
+    .input-field {
+      width: 100%;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.04), rgba(7,9,21,0.98));
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 9px 10px;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+    }
+
+    .input-field::placeholder {
+      color: rgba(164,173,196,0.75);
+    }
+
+    .input-field:focus {
+      border-color: rgba(159,210,106,0.85);
+      box-shadow: 0 0 0 1px rgba(159,210,106,0.45);
+      background: radial-gradient(circle at top, rgba(159,210,106,0.08), rgba(7,9,21,0.98));
+    }
+
+    textarea.input-field {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    .input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .input-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .input-helper {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .upload-dropzone {
+      border-radius: 18px;
+      padding: 18px 12px;
+      border: 1px dashed rgba(255,255,255,0.28);
+      background: radial-gradient(circle at top left, rgba(205,255,172,0.16), rgba(3,5,15,0.98));
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .upload-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      border: 1px solid rgba(159,210,106,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top left, rgba(205,255,172,0.5), rgba(4,7,18,0.98));
+      box-shadow: 0 14px 30px rgba(155,224,94,0.55);
+      font-size: 20px;
+    }
+
+    .upload-title {
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .upload-body {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .upload-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .btn-ghost {
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      padding: 6px 12px;
+      font-size: 12px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.04), rgba(4,7,18,0.98));
+      color: var(--text-main);
+      cursor: pointer;
+      outline: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background var(--transition-fast), border-color var(--transition-fast), transform 80ms ease-out, box-shadow 80ms ease-out;
+    }
+
+    .btn-ghost:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+    }
+
+    .btn-primary-solid {
+      border-radius: 999px;
+      border: none;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      background: linear-gradient(120deg, #9fd26a, #f7d477);
+      color: #051010;
+      cursor: pointer;
+      outline: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.7);
+      transition: transform 80ms ease-out, box-shadow 80ms ease-out, filter 120ms ease-out;
+    }
+
+    .btn-primary-solid:active {
+      transform: translateY(1px) scale(0.99);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.8);
+      filter: brightness(0.96);
+    }
+
+    .btn-primary-solid[disabled] {
+      cursor: default;
+      opacity: 0.55;
+      box-shadow: none;
+    }
+
+    .flow-footer {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .subtle-caption {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .flow-layout-two {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    @media (min-width: 720px) {
+      .flow-layout-two {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+      .flow-main {
+        flex: 3;
+      }
+      .flow-side {
+        flex: 2;
+      }
+    }
+
+    .photo-preview-card {
+      border-radius: 18px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.06), rgba(7,9,21,0.98));
+      border: 1px solid rgba(255,255,255,0.14);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .photo-frame {
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      background: radial-gradient(circle at center, rgba(159,210,106,0.1), rgba(5,8,17,0.98));
+      min-height: 170px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .photo-img {
+      width: 100%;
+      max-height: 260px;
+      object-fit: cover;
+      display: none;
+    }
+
+    .photo-placeholder-icon {
+      font-size: 32px;
+      opacity: 0.5;
+    }
+
+    .photo-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .pill-tag {
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      padding: 3px 7px;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pill-tag-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .loading-strip {
+      margin-top: 8px;
+      position: relative;
+      width: 100%;
+      height: 34px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: linear-gradient(120deg, rgba(255,255,255,0.05), rgba(7,9,21,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+      display: none;
+    }
+
+    .loading-strip-inner {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(115deg, rgba(159,210,106,0.05), rgba(255,255,255,0.3), rgba(242,222,124,0.06));
+      transform: translateX(-100%);
+      animation: shimmer 1200ms linear infinite;
+    }
+
+    .loading-copy {
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .suggestions-grid {
+      display: grid;
+      grid-template-columns: minmax(0,1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    @media (min-width: 640px) {
+      .suggestions-grid {
+        grid-template-columns: repeat(3, minmax(0,1fr));
+      }
+    }
+
+    .suggestion-card {
+      border-radius: 16px;
+      padding: 9px 9px 10px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.04), rgba(7,9,21,0.98));
+      border: 1px solid rgba(255,255,255,0.16);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform 80ms ease-out, background 160ms ease-out;
+    }
+
+    .suggestion-card.selected {
+      border-color: rgba(159,210,106,0.95);
+      box-shadow: 0 14px 32px rgba(152,219,93,0.6);
+      background: radial-gradient(circle at top left, rgba(205,255,172,0.26), rgba(7,9,21,0.98));
+    }
+
+    .suggestion-name {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .suggestion-latin {
+      font-size: 11px;
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    .confidence-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .confidence-bar-wrap {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      margin-top: 3px;
+    }
+
+    .confidence-bar {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #9fd26a, #f7d477);
+      width: 0%;
+    }
+
+    .rarity-pill {
+      font-size: 10px;
+      border-radius: 999px;
+      padding: 2px 6px;
+      border: 1px solid rgba(255,255,255,0.25);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .rarity-pill.common { border-color: rgba(159,210,106,0.6); color: #c9fba1; }
+    .rarity-pill.uncommon { border-color: rgba(93,178,255,0.7); color: #c3e4ff; }
+    .rarity-pill.rare { border-color: rgba(247,212,119,0.9); color: #ffe9b5; }
+    .rarity-pill.legendary { border-color: rgba(255,107,107,0.9); color: #ffb8b8; }
+
+    .category-pill {
+      font-size: 10px;
+      color: var(--text-muted);
+      border-radius: 999px;
+      padding: 2px 7px;
+      border: 1px solid rgba(255,255,255,0.16);
+    }
+
+    .card-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .card-shell {
+      border-radius: 20px;
+      padding: 10px;
+      background: radial-gradient(circle at top left, rgba(159,210,106,0.12), rgba(7,9,21,0.98));
+      border: 1px solid rgba(255,255,255,0.16);
+      box-shadow: var(--shadow-subtle);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .card-title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 640;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    .card-tags {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+
+    .card-art-frame {
+      margin-top: 8px;
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      height: 210px;
+      background: radial-gradient(circle at 20% 0, rgba(255,255,255,0.22), rgba(7,9,21,0.98));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-art-photo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      mix-blend-mode: soft-light;
+      opacity: 0.87;
+    }
+
+    .card-art-overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(159,210,106,0.16), transparent 40%),
+                  radial-gradient(circle at bottom right, rgba(29,78,216,0.42), rgba(3,7,18,0.98));
+      mix-blend-mode: overlay;
+    }
+
+    .card-art-icon {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      border-radius: 50% 40% 55% 45%;
+      background: radial-gradient(circle at 20% 0, rgba(255,255,255,0.35), rgba(15,23,42,0.98));
+      box-shadow: 0 20px 40px rgba(0,0,0,0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+    }
+
+    .card-art-ring {
+      position: absolute;
+      inset: 12px;
+      border-radius: inherit;
+      border: 1px solid rgba(255,255,255,0.55);
+      border-top-color: rgba(255,255,255,0.05);
+      border-left-color: rgba(255,255,255,0.15);
+      border-bottom-color: rgba(255,255,255,0.55);
+      opacity: 0.7;
+    }
+
+    .card-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+
+    .card-meta-item {
+      padding: 6px 8px;
+      border-radius: 12px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.05), rgba(5,7,18,0.98));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .card-meta-label {
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .card-meta-value {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .card-notes {
+      margin-top: 8px;
+      padding: 8px 9px;
+      border-radius: 12px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.05), rgba(5,7,18,0.98));
+      border: 1px dashed rgba(255,255,255,0.14);
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: pre-line;
+    }
+
+    .binder-tabs {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+      margin-bottom: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .binder-tab {
+      min-width: 130px;
+      border-radius: 16px;
+      padding: 7px 9px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: radial-gradient(circle at top, rgba(255,255,255,0.05), rgba(7,9,21,0.98));
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform 80ms ease-out, background 160ms ease-out;
+    }
+
+    .binder-tab.active {
+      border-color: rgba(159,210,106,0.96);
+      box-shadow: 0 16px 36px rgba(152,219,93,0.6);
+      background: radial-gradient(circle at top left, rgba(205,255,172,0.32), rgba(7,9,21,0.98));
+    }
+
+    .binder-tab-name {
+      font-weight: 600;
+    }
+
+    .binder-tab-meta {
+      color: var(--text-muted);
+    }
+
+    .binder-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
+    .binder-summary strong {
+      font-size: 12px;
+    }
+
+    .binder-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+      font-size: 11px;
+    }
+
+    .filter-chip {
+      border-radius: 999px;
+      padding: 3px 9px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: radial-gradient(circle at top, rgba(255,255,255,0.04), rgba(6,8,18,0.98));
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+
+    .filter-chip.active {
+      border-color: rgba(159,210,106,0.95);
+      background: radial-gradient(circle at top, rgba(159,210,106,0.18), rgba(6,8,18,0.98));
+      color: var(--text-main);
+    }
+
+    .binder-grid {
+      border-radius: 18px;
+      padding: 10px;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.06), rgba(3,5,15,0.98));
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.6);
+    }
+
+    .binder-page {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 8px;
+    }
+
+    @media (min-width: 768px) {
+      .binder-page {
+        gap: 10px;
+      }
+    }
+
+    .slot-card {
+      aspect-ratio: 3 / 4;
+      border-radius: 13px;
+      padding: 4px;
+      background: radial-gradient(circle at top left, rgba(255,255,255,0.08), rgba(10,12,24,0.98));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), background 160ms ease-out;
+    }
+
+    .slot-card.filled:hover {
+      transform: translateY(-1px) scale(1.01);
+      box-shadow: 0 14px 30px rgba(0,0,0,0.7);
+    }
+
+    .slot-card.empty {
+      opacity: 0.5;
+      cursor: default;
+      background: repeating-linear-gradient(45deg, rgba(255,255,255,0.07), rgba(255,255,255,0.07) 2px, rgba(10,12,24,0.96) 2px, rgba(10,12,24,0.96) 6px);
+    }
+
+    .slot-inner {
+      border-radius: 10px;
+      height: 100%;
+      background: radial-gradient(circle at top, rgba(255,255,255,0.06), rgba(3,6,18,0.98));
+      padding: 5px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .slot-empty-label {
+      font-size: 10px;
+      color: rgba(164,173,196,0.7);
+      text-align: center;
+      margin-top: auto;
+      margin-bottom: auto;
+    }
+
+    .slot-art {
+      height: 60%;
+      border-radius: 9px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slot-art::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(0,0,0,0.0), rgba(0,0,0,0.35));
+    }
+
+    .slot-footer {
+      margin-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 10px;
+    }
+
+    .slot-title {
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .slot-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .slot-rarity-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+    }
+
+    .slot-card-number {
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+    .collection-progress-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .collection-progress-item {
+      padding: 8px 9px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: radial-gradient(circle at top, rgba(255,255,255,0.05), rgba(7,9,21,0.98));
+    }
+
+    .collection-progress-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .collection-progress-value {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .badge-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    footer.navbar {
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
+      padding: 8px 6px 10px;
+      margin-top: 4px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: radial-gradient(circle at top, rgba(159,210,106,0.12), rgba(2,4,12,0.98));
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 4px;
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.85);
+    }
+
+    .nav-item {
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 6px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+      outline: none;
+      transition: background var(--transition-fast), color var(--transition-fast), transform 80ms ease-out, box-shadow 80ms ease-out;
+    }
+
+    .nav-item span.icon {
+      font-size: 17px;
+    }
+
+    .nav-item.active {
+      background: radial-gradient(circle at top, rgba(205,255,172,0.22), rgba(7,9,21,0.98));
+      color: var(--text-main);
+      box-shadow: 0 10px 24px rgba(152,219,93,0.5);
+    }
+
+    .nav-item:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+    }
+
+    .empty-state {
+      padding: 8px 10px;
+      border-radius: 14px;
+      border: 1px dashed rgba(255,255,255,0.16);
+      color: var(--text-muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .badge-dot-unlocked {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(159,210,106,0.8);
+    }
+
+    .badge-dot-locked {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      border: 1px dashed rgba(255,255,255,0.4);
+    }
+
+    .badge-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    @media (min-width: 1024px) {
+      .app-shell {
+        padding-top: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand-mark">
+          <div class="brand-avatar">
+            <div class="brand-avatar-inner">BB</div>
+          </div>
+          <div class="brand-text">
+            <div class="brand-title">BirdBinder</div>
+            <div class="brand-subtitle">Field sightings, premium binders</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn-pill" id="navToProgress">
+            <span class="icon">⭐</span>
+            <span>Progress</span>
+          </button>
+          <button class="btn-pill primary" id="primaryAddSighting">
+            <span class="icon">＋</span>
+            <span>New sighting</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="view-root">
+      <main>
+        <section class="screen active" id="screen-home">
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Dashboard</div>
+              </div>
+              <div class="chip">
+                <span class="chip-dot"></span>
+                <span id="heroCollectionLabel">12 cards · 3 binders</span>
+              </div>
+            </div>
+
+            <div class="primary-cta">
+              <div>
+                <div class="hero-headline">Turn your bird sightings into a <span class="hero-highlight">premium binder</span>.</div>
+                <div class="hero-body">Capture a photo, confirm the species, and BirdBinder will mint it as a collectible card nestled into themed binders.</div>
+              </div>
+              <div class="hero-actions">
+                <button class="btn-primary-solid" id="heroAddSighting">
+                  <span>Start a new sighting</span>
+                  <span>→</span>
+                </button>
+                <button class="btn-ghost" id="heroViewBinder">
+                  <span>Open binder</span>
+                </button>
+              </div>
+              <div class="metric-row">
+                <div class="metric-card">
+                  <div class="metric-label">Cards collected</div>
+                  <div class="metric-value" id="metricCards">12</div>
+                  <div class="metric-pill" id="metricSpecies">10 species · 3 binders</div>
+                  <div class="progress-track" style="margin-top:6px;">
+                    <div class="progress-bar" id="overallProgressBar"></div>
+                  </div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Binder completion</div>
+                  <div class="metric-value" id="metricCompletion">48%</div>
+                  <div class="metric-pill" id="metricHighlight">Songbirds binder leading</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Recent sightings</div>
+                <div class="cluster-subtitle">Tap any card to open its binder view.</div>
+              </div>
+            </div>
+            <div class="recent-list" id="recentSightingsList"></div>
+          </section>
+
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Highlights & badges</div>
+                <div class="cluster-subtitle">A snapshot of milestones across your collection.</div>
+              </div>
+              <button class="btn-ghost" id="homeToProgress" style="font-size:11px;padding-inline:10px;">View all</button>
+            </div>
+            <div class="achievements-row" id="highlightBadgesRow"></div>
+          </section>
+        </section>
+
+        <section class="screen" id="screen-upload">
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Add sighting</div>
+                <div class="cluster-subtitle">Drop in a photo or use your camera, then we will suggest species matches.</div>
+              </div>
+              <span class="badge-pill">Step 1 of 3</span>
+            </div>
+            <div class="flow-layout-two">
+              <div class="flow-main">
+                <div class="upload-dropzone" id="uploadDropzone">
+                  <div class="upload-icon">🕊️</div>
+                  <div class="upload-title">Upload or capture your bird</div>
+                  <div class="upload-body">Supported: any image from your camera roll. No files are uploaded anywhere in this demo.</div>
+                  <div class="upload-actions">
+                    <button type="button" class="btn-ghost" id="btnChooseFile">
+                      <span>Choose photo</span>
+                    </button>
+                    <button type="button" class="btn-ghost" id="btnUseCamera">
+                      <span>Use camera</span>
+                    </button>
+                  </div>
+                  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none" />
+                </div>
+
+                <div class="flow-section-title">Sighting details</div>
+                <div class="input-row">
+                  <div class="input-label-row">
+                    <label for="inputLocation">Where did you see it?</label>
+                    <span class="input-helper">Optional but feels more special.</span>
+                  </div>
+                  <input id="inputLocation" class="input-field" placeholder="e.g. Ashburn, Virginia, US" />
+                </div>
+                <div class="input-row">
+                  <div class="input-label-row">
+                    <label for="inputDate">When did you see it?</label>
+                  </div>
+                  <input id="inputDate" class="input-field" type="date" />
+                </div>
+                <div class="input-row">
+                  <div class="input-label-row">
+                    <label for="inputNotes">Field notes</label>
+                    <span class="input-helper">Behavior, calls, weather, anything you noticed.</span>
+                  </div>
+                  <textarea id="inputNotes" class="input-field" placeholder="Perched on backyard fence, bright song just after sunrise..."></textarea>
+                </div>
+              </div>
+              <div class="flow-side">
+                <div class="photo-preview-card">
+                  <div class="photo-frame">
+                    <img id="photoPreview" class="photo-img" alt="Bird preview" />
+                    <div class="photo-placeholder-icon" id="photoPlaceholder">📷</div>
+                  </div>
+                  <div class="photo-meta-row">
+                    <span id="photoMetaLabel">No photo yet</span>
+                    <span class="pill-tag" id="photoMetaTag">
+                      <span class="pill-tag-dot"></span>
+                      <span>Ready to analyze</span>
+                    </span>
+                  </div>
+                  <div class="loading-strip" id="aiLoadingStrip">
+                    <div class="loading-strip-inner"></div>
+                    <div class="loading-copy">Suggesting likely species from your field photo...</div>
+                  </div>
+                  <button class="btn-primary-solid" id="btnAnalyze" style="margin-top:8px;">
+                    <span>Suggest species</span>
+                    <span>⚡</span>
+                  </button>
+                  <div class="subtle-caption">BirdBinder uses mock data only in this demo. No real identification or uploads occur.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="screen-identify">
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Review identification</div>
+                <div class="cluster-subtitle">Choose the best match. This will become your collectible card.</div>
+              </div>
+              <span class="badge-pill">Step 2 of 3</span>
+            </div>
+            <div class="flow-layout-two">
+              <div class="flow-main">
+                <div class="flow-section-title">Top matches</div>
+                <div class="suggestions-grid" id="suggestionsGrid"></div>
+                <div class="flow-section-title">Binder & card</div>
+                <div class="input-row">
+                  <div class="input-label-row">
+                    <label for="selectBinder">Binder destination</label>
+                    <span class="input-helper">We preselect based on category, but you can change it.</span>
+                  </div>
+                  <select id="selectBinder" class="input-field"></select>
+                </div>
+                <div class="input-row">
+                  <div class="input-label-row">
+                    <label for="inputCardNotes">Card notes (optional)</label>
+                    <span class="input-helper">Will be saved on the card in addition to field notes.</span>
+                  </div>
+                  <textarea id="inputCardNotes" class="input-field" placeholder="e.g. First time seeing this species in my neighborhood."></textarea>
+                </div>
+              </div>
+              <div class="flow-side">
+                <div class="photo-preview-card">
+                  <div class="photo-frame">
+                    <img id="photoPreviewIdentify" class="photo-img" alt="Bird preview" />
+                    <div class="photo-placeholder-icon">🪶</div>
+                  </div>
+                  <div class="photo-meta-row">
+                    <span id="identifyMetaLabel">Select a species to finalize details.</span>
+                  </div>
+                </div>
+                <div class="flow-footer">
+                  <button class="btn-primary-solid" id="btnConfirmCard" disabled>
+                    <span>Mint card</span>
+                    <span>✨</span>
+                  </button>
+                  <div class="subtle-caption">Minting just updates local demo state. You can refresh to reset the experience.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="screen-card-detail">
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Card detail</div>
+                <div class="cluster-subtitle" id="cardDetailSubtitle">From: Songbirds binder</div>
+              </div>
+              <button class="btn-ghost" id="cardBackToBinder" style="font-size:11px;">Back to binder</button>
+            </div>
+            <div class="card-layout">
+              <div class="card-shell" id="cardShell"></div>
+              <div class="flow-footer">
+                <button class="btn-primary-solid" id="cardBackHome">
+                  <span>Done · back to dashboard</span>
+                </button>
+                <div class="subtle-caption">Future ideas: share card, compare sightings, seasonal streaks, and more.</div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="screen-binder">
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Binder view</div>
+                <div class="cluster-subtitle">A trading card style spread with filled and empty slots.</div>
+              </div>
+              <span class="badge-pill" id="binderChipLabel">Songbirds binder</span>
+            </div>
+            <div class="binder-tabs" id="binderTabs"></div>
+            <div class="binder-summary">
+              <div>
+                <strong id="binderSummaryTitle">Songbirds binder</strong>
+                <div id="binderSummaryMeta">8 of 18 slots filled · 44% complete</div>
+              </div>
+              <div style="min-width:120px;">
+                <div class="progress-track">
+                  <div class="progress-bar" id="binderProgressBar"></div>
+                </div>
+              </div>
+            </div>
+            <div class="binder-filters">
+              <span>Filters:</span>
+              <button class="filter-chip active" data-filter="all">All</button>
+              <button class="filter-chip" data-filter="common">Common</button>
+              <button class="filter-chip" data-filter="uncommon">Uncommon</button>
+              <button class="filter-chip" data-filter="rare">Rare</button>
+              <button class="filter-chip" data-filter="legendary">Legendary</button>
+            </div>
+            <div class="binder-grid">
+              <div class="binder-page" id="binderGrid"></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="screen-progress">
+          <section class="cluster">
+            <div class="cluster-header">
+              <div>
+                <div class="cluster-title">Collection progress</div>
+                <div class="cluster-subtitle">See how your cards, binders, and badges stack up.</div>
+              </div>
+            </div>
+            <div class="collection-progress-grid">
+              <div class="collection-progress-item">
+                <div class="collection-progress-label">Cards collected</div>
+                <div class="collection-progress-value" id="progressCards">12</div>
+                <div class="progress-track" style="margin-top:4px;">
+                  <div class="progress-bar" id="progressCardsBar"></div>
+                </div>
+              </div>
+              <div class="collection-progress-item">
+                <div class="collection-progress-label">Unique species</div>
+                <div class="collection-progress-value" id="progressSpecies">10</div>
+                <div class="progress-track" style="margin-top:4px;">
+                  <div class="progress-bar" id="progressSpeciesBar"></div>
+                </div>
+              </div>
+              <div class="collection-progress-item">
+                <div class="collection-progress-label">Binders completed</div>
+                <div class="collection-progress-value" id="progressBinders">0 of 3</div>
+                <div class="progress-track" style="margin-top:4px;">
+                  <div class="progress-bar" id="progressBindersBar"></div>
+                </div>
+              </div>
+              <div class="collection-progress-item">
+                <div class="collection-progress-label">Rarity spread</div>
+                <div class="collection-progress-value" id="progressRarity">0 C · 0 U · 0 R · 0 L</div>
+              </div>
+            </div>
+
+            <div class="flow-section-title" style="margin-top:10px;">Binder breakdown</div>
+            <div class="recent-list" id="binderProgressList"></div>
+
+            <div class="flow-section-title" style="margin-top:10px;">Achievement badges</div>
+            <div class="badge-grid" id="badgesGrid"></div>
+          </section>
+        </section>
+      </main>
+
+      <footer class="navbar">
+        <button class="nav-item active" data-nav="home">
+          <span class="icon">🏠</span>
+          <span>Home</span>
+        </button>
+        <button class="nav-item" data-nav="upload">
+          <span class="icon">➕</span>
+          <span>Add</span>
+        </button>
+        <button class="nav-item" data-nav="binder">
+          <span class="icon">📔</span>
+          <span>Binder</span>
+        </button>
+        <button class="nav-item" data-nav="progress">
+          <span class="icon">⭐</span>
+          <span>Progress</span>
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    const binders = [
+      {
+        id: 'songbirds',
+        name: 'Songbirds & Backyard',
+        color: 'var(--binder-green)',
+        capacity: 18,
+        description: 'Chirps, trills, and everyday companions.',
+      },
+      {
+        id: 'raptors',
+        name: 'Raptors & Birds of Prey',
+        color: 'var(--binder-amber)',
+        capacity: 12,
+        description: 'Hawks, owls, and other aerial hunters.',
+      },
+      {
+        id: 'water',
+        name: 'Water & Shoreline',
+        color: 'var(--binder-blue)',
+        capacity: 12,
+        description: 'Ducks, waders, and coastal specialists.',
+      },
+    ];
+
+    const initialCards = [
+      {
+        id: 'c1',
+        speciesName: 'American Robin',
+        scientificName: 'Turdus migratorius',
+        rarity: 'Common',
+        category: 'Songbird',
+        image: 'linear-gradient(135deg,#f97316,#ea580c,#1f2937)',
+        location: 'Ashburn, Virginia, US',
+        dateSeen: '2026-03-21',
+        notes: 'Foraging on lawn, bright orange breast very noticeable.',
+        extraNotes: 'Classic backyard guest.',
+        confidence: 96,
+        binderId: 'songbirds',
+        cardNumber: 'BB-S001',
+        createdAt: '2026-03-21T08:13:00Z',
+      },
+      {
+        id: 'c2',
+        speciesName: 'Northern Cardinal',
+        scientificName: 'Cardinalis cardinalis',
+        rarity: 'Common',
+        category: 'Songbird',
+        image: 'linear-gradient(135deg,#ef4444,#b91c1c,#020617)',
+        location: 'Ashburn, Virginia, US',
+        dateSeen: '2026-03-18',
+        notes: 'Pair visiting feeder at dusk.',
+        extraNotes: 'Male singing loudly from maple tree.',
+        confidence: 94,
+        binderId: 'songbirds',
+        cardNumber: 'BB-S002',
+        createdAt: '2026-03-18T22:35:00Z',
+      },
+      {
+        id: 'c3',
+        speciesName: 'Blue Jay',
+        scientificName: 'Cyanocitta cristata',
+        rarity: 'Uncommon',
+        category: 'Songbird',
+        image: 'linear-gradient(135deg,#60a5fa,#1d4ed8,#020617)',
+        location: 'Ashburn, Virginia, US',
+        dateSeen: '2026-02-28',
+        notes: 'Loud calls near oak, carrying a peanut.',
+        extraNotes: 'Striking blue and crest easily visible.',
+        confidence: 91,
+        binderId: 'songbirds',
+        cardNumber: 'BB-S003',
+        createdAt: '2026-02-28T15:02:00Z',
+      },
+      {
+        id: 'c4',
+        speciesName: 'Carolina Chickadee',
+        scientificName: 'Poecile carolinensis',
+        rarity: 'Common',
+        category: 'Songbird',
+        image: 'linear-gradient(135deg,#e5e7eb,#4b5563,#020617)',
+        location: 'Ashburn, Virginia, US',
+        dateSeen: '2026-02-10',
+        notes: 'Brief visit to suet feeder in cold weather.',
+        extraNotes: 'Tiny, quick movements, familiar call.',
+        confidence: 88,
+        binderId: 'songbirds',
+        cardNumber: 'BB-S004',
+        createdAt: '2026-02-10T09:20:00Z',
+      },
+      {
+        id: 'c5',
+        speciesName: 'Red-tailed Hawk',
+        scientificName: 'Buteo jamaicensis',
+        rarity: 'Uncommon',
+        category: 'Raptor',
+        image: 'linear-gradient(135deg,#f97316,#92400e,#020617)',
+        location: 'Route 7 roadside, Virginia, US',
+        dateSeen: '2026-01-29',
+        notes: 'Perched on light pole scanning highway median.',
+        extraNotes: 'Distinctive red tail visible when it took off.',
+        confidence: 89,
+        binderId: 'raptors',
+        cardNumber: 'BB-R001',
+        createdAt: '2026-01-29T14:44:00Z',
+      },
+      {
+        id: 'c6',
+        speciesName: 'Cooper\'s Hawk',
+        scientificName: 'Accipiter cooperii',
+        rarity: 'Rare',
+        category: 'Raptor',
+        image: 'linear-gradient(135deg,#6b7280,#111827,#020617)',
+        location: 'Suburban backyard, Ashburn, US',
+        dateSeen: '2026-03-03',
+        notes: 'Gliding low between houses, scattered doves.',
+        extraNotes: 'Narrow tail and flap-glide pattern stood out.',
+        confidence: 82,
+        binderId: 'raptors',
+        cardNumber: 'BB-R002',
+        createdAt: '2026-03-03T17:05:00Z',
+      },
+      {
+        id: 'c7',
+        speciesName: 'Great Blue Heron',
+        scientificName: 'Ardea herodias',
+        rarity: 'Uncommon',
+        category: 'Water',
+        image: 'linear-gradient(135deg,#38bdf8,#0f172a,#020617)',
+        location: 'Local pond, Ashburn, US',
+        dateSeen: '2026-03-11',
+        notes: 'Standing motionless at water\'s edge.',
+        extraNotes: 'Huge bird with slow wingbeats when it flew.',
+        confidence: 95,
+        binderId: 'water',
+        cardNumber: 'BB-W001',
+        createdAt: '2026-03-11T07:55:00Z',
+      },
+      {
+        id: 'c8',
+        speciesName: 'Mallard',
+        scientificName: 'Anas platyrhynchos',
+        rarity: 'Common',
+        category: 'Water',
+        image: 'linear-gradient(135deg,#22c55e,#15803d,#052e16)',
+        location: 'Neighborhood pond, Ashburn, US',
+        dateSeen: '2026-02-18',
+        notes: 'Mixed flock resting on the water.',
+        extraNotes: 'Male had bright green head and yellow bill.',
+        confidence: 93,
+        binderId: 'water',
+        cardNumber: 'BB-W002',
+        createdAt: '2026-02-18T13:12:00Z',
+      },
+      {
+        id: 'c9',
+        speciesName: 'Canada Goose',
+        scientificName: 'Branta canadensis',
+        rarity: 'Common',
+        category: 'Water',
+        image: 'linear-gradient(135deg,#4b5563,#111827,#020617)',
+        location: 'Office park lawn, Ashburn, US',
+        dateSeen: '2026-01-12',
+        notes: 'Large grazing flock, frequent honking.',
+        extraNotes: 'Some individuals banded.',
+        confidence: 97,
+        binderId: 'water',
+        cardNumber: 'BB-W003',
+        createdAt: '2026-01-12T16:02:00Z',
+      },
+      {
+        id: 'c10',
+        speciesName: 'Eastern Bluebird',
+        scientificName: 'Sialia sialis',
+        rarity: 'Uncommon',
+        category: 'Songbird',
+        image: 'linear-gradient(135deg,#38bdf8,#f97316,#020617)',
+        location: 'Edge of open field, Loudoun County, US',
+        dateSeen: '2026-03-24',
+        notes: 'Perched on fencepost between short flights.',
+        extraNotes: 'Brilliant blue upperparts with warm orange chest.',
+        confidence: 90,
+        binderId: 'songbirds',
+        cardNumber: 'BB-S005',
+        createdAt: '2026-03-24T16:45:00Z',
+      },
+      {
+        id: 'c11',
+        speciesName: 'Downy Woodpecker',
+        scientificName: 'Dryobates pubescens',
+        rarity: 'Uncommon',
+        category: 'Songbird',
+        image: 'linear-gradient(135deg,#e5e7eb,#ef4444,#020617)',
+        location: 'Mature maple in backyard, Ashburn, US',
+        dateSeen: '2026-02-03',
+        notes: 'Drumming on upper trunk near suet feeder.',
+        extraNotes: 'Tiny woodpecker with white back and small bill.',
+        confidence: 87,
+        binderId: 'songbirds',
+        cardNumber: 'BB-S006',
+        createdAt: '2026-02-03T10:18:00Z',
+      },
+      {
+        id: 'c12',
+        speciesName: 'Barred Owl',
+        scientificName: 'Strix varia',
+        rarity: 'Legendary',
+        category: 'Raptor',
+        image: 'linear-gradient(135deg,#f9fafb,#4b5563,#020617)',
+        location: 'Wooded trail, Northern Virginia, US',
+        dateSeen: '2026-03-30',
+        notes: 'Heard classic "who-cooks-for-you" call before spotting.',
+        extraNotes: 'Perched low over creek, calmly watching.',
+        confidence: 92,
+        binderId: 'raptors',
+        cardNumber: 'BB-R003',
+        createdAt: '2026-03-30T21:05:00Z',
+      },
+    ];
+
+    const suggestionPool = [
+      {
+        speciesName: 'American Goldfinch',
+        scientificName: 'Spinus tristis',
+        rarity: 'Uncommon',
+        category: 'Songbird',
+      },
+      {
+        speciesName: 'House Finch',
+        scientificName: 'Haemorhous mexicanus',
+        rarity: 'Common',
+        category: 'Songbird',
+      },
+      {
+        speciesName: 'Mourning Dove',
+        scientificName: 'Zenaida macroura',
+        rarity: 'Common',
+        category: 'Songbird',
+      },
+      {
+        speciesName: 'Red-shouldered Hawk',
+        scientificName: 'Buteo lineatus',
+        rarity: 'Rare',
+        category: 'Raptor',
+      },
+      {
+        speciesName: 'Osprey',
+        scientificName: 'Pandion haliaetus',
+        rarity: 'Rare',
+        category: 'Raptor',
+      },
+      {
+        speciesName: 'Wood Duck',
+        scientificName: 'Aix sponsa',
+        rarity: 'Rare',
+        category: 'Water',
+      },
+      {
+        speciesName: 'Herring Gull',
+        scientificName: 'Larus argentatus',
+        rarity: 'Uncommon',
+        category: 'Water',
+      },
+      {
+        speciesName: 'Carolina Wren',
+        scientificName: 'Thryothorus ludovicianus',
+        rarity: 'Common',
+        category: 'Songbird',
+      },
+    ];
+
+    const badgesConfig = [
+      {
+        id: 'first-card',
+        name: 'First Flight',
+        description: 'Mint your very first bird card.',
+        icon: '🪽',
+        isUnlocked: (cards) => cards.length >= 1,
+      },
+      {
+        id: 'five-cards',
+        name: 'Fledgling Birder',
+        description: 'Collect at least 5 cards.',
+        icon: '🐦',
+        isUnlocked: (cards) => cards.length >= 5,
+      },
+      {
+        id: 'ten-cards',
+        name: 'Binder Builder',
+        description: 'Collect at least 10 cards.',
+        icon: '📔',
+        isUnlocked: (cards) => cards.length >= 10,
+      },
+      {
+        id: 'raptor-spot',
+        name: 'Raptor Rookie',
+        description: 'Add a card from the Raptors binder.',
+        icon: '🦅',
+        isUnlocked: (cards) => cards.some((c) => c.binderId === 'raptors'),
+      },
+      {
+        id: 'water-spot',
+        name: 'Water Watcher',
+        description: 'Add a card from the Water & Shoreline binder.',
+        icon: '🦆',
+        isUnlocked: (cards) => cards.some((c) => c.binderId === 'water'),
+      },
+      {
+        id: 'legendary',
+        name: 'Legendary Sighting',
+        description: 'Collect at least one Legendary rarity card.',
+        icon: '🌟',
+        isUnlocked: (cards) => cards.some((c) => c.rarity === 'Legendary'),
+      },
+    ];
+
+    let cards = [...initialCards];
+    let currentView = 'home';
+    let currentBinderId = 'songbirds';
+    let selectedSuggestionIndex = null;
+    let suggestions = [];
+    let currentPhotoDataUrl = null;
+    let currentCardId = null;
+    let currentFilter = 'all';
+
+    const screenIds = {
+      home: 'screen-home',
+      upload: 'screen-upload',
+      identify: 'screen-identify',
+      cardDetail: 'screen-card-detail',
+      binder: 'screen-binder',
+      progress: 'screen-progress',
+    };
+
+    function navigate(view) {
+      currentView = view;
+      Object.values(screenIds).forEach((id) => {
+        document.getElementById(id).classList.remove('active');
+      });
+      document.getElementById(screenIds[view]).classList.add('active');
+
+      document.querySelectorAll('.nav-item').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.nav === view);
+      });
+
+      if (view === 'home') {
+        refreshHome();
+      } else if (view === 'binder') {
+        refreshBinderTabs();
+        refreshBinderGrid();
+      } else if (view === 'progress') {
+        refreshProgress();
+      } else if (view === 'cardDetail') {
+        renderCardDetail();
+      }
+    }
+
+    function rarityKey(rarity) {
+      return rarity.toLowerCase();
+    }
+
+    function rarityColor(rarity) {
+      const key = rarityKey(rarity);
+      switch (key) {
+        case 'common':
+          return '#9fd26a';
+        case 'uncommon':
+          return '#5db2ff';
+        case 'rare':
+          return '#f7d477';
+        case 'legendary':
+          return '#ff6b6b';
+        default:
+          return '#9ca3af';
+      }
+    }
+
+    function capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function initNavigation() {
+      document.querySelectorAll('.nav-item').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.nav;
+          if (target === 'home') navigate('home');
+          if (target === 'upload') navigate('upload');
+          if (target === 'binder') navigate('binder');
+          if (target === 'progress') navigate('progress');
+        });
+      });
+
+      document.getElementById('primaryAddSighting').addEventListener('click', () => navigate('upload'));
+      document.getElementById('heroAddSighting').addEventListener('click', () => navigate('upload'));
+      document.getElementById('heroViewBinder').addEventListener('click', () => navigate('binder'));
+      document.getElementById('navToProgress').addEventListener('click', () => navigate('progress'));
+      document.getElementById('homeToProgress').addEventListener('click', () => navigate('progress'));
+      document.getElementById('cardBackHome').addEventListener('click', () => navigate('home'));
+      document.getElementById('cardBackToBinder').addEventListener('click', () => navigate('binder'));
+    }
+
+    function refreshHome() {
+      const totalCards = cards.length;
+      const speciesSet = new Set(cards.map((c) => c.speciesName));
+      const uniqueSpecies = speciesSet.size;
+      const filledSlots = cards.length;
+      const totalSlots = binders.reduce((sum, b) => sum + b.capacity, 0);
+      const completion = totalSlots ? Math.round((filledSlots / totalSlots) * 100) : 0;
+
+      document.getElementById('metricCards').textContent = totalCards;
+      document.getElementById('metricSpecies').textContent = `${uniqueSpecies} species · ${binders.length} binders`;
+      document.getElementById('metricCompletion').textContent = `${completion}% complete`;
+      document.getElementById('heroCollectionLabel').textContent = `${totalCards} cards · ${binders.length} binders`;
+
+      const leader = getBinderLeader();
+      document.getElementById('metricHighlight').textContent = leader
+        ? `${leader.name.split(' ')[0]} binder leading`
+        : 'Start your first binder';
+
+      const bar = document.getElementById('overallProgressBar');
+      bar.style.transform = `scaleX(${Math.min(completion / 100, 1)})`;
+
+      renderRecentSightings();
+      renderHighlightBadges();
+    }
+
+    function getBinderLeaderboardData() {
+      return binders.map((binder) => {
+        const inBinder = cards.filter((c) => c.binderId === binder.id);
+        const completion = binder.capacity ? Math.round((inBinder.length / binder.capacity) * 100) : 0;
+        return { binder, count: inBinder.length, completion };
+      });
+    }
+
+    function getBinderLeader() {
+      const rows = getBinderLeaderboardData();
+      if (!rows.length) return null;
+      return rows.reduce((best, row) => (row.completion > best.completion ? row : best), rows[0]).binder;
+    }
+
+    function renderRecentSightings() {
+      const container = document.getElementById('recentSightingsList');
+      container.innerHTML = '';
+      const sorted = [...cards].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      const recent = sorted.slice(0, 5);
+
+      if (!recent.length) {
+        const div = document.createElement('div');
+        div.className = 'empty-state';
+        div.textContent = 'Mint a card to see your sightings timeline here.';
+        container.appendChild(div);
+        return;
+      }
+
+      recent.forEach((card) => {
+        const item = document.createElement('div');
+        item.className = 'recent-item';
+        item.addEventListener('click', () => openCard(card.id));
+
+        const thumb = document.createElement('div');
+        thumb.className = 'recent-thumb';
+        thumb.style.backgroundImage = card.image;
+
+        const main = document.createElement('div');
+        main.className = 'recent-main';
+
+        const title = document.createElement('div');
+        title.className = 'recent-title';
+        title.textContent = card.speciesName;
+
+        const meta = document.createElement('div');
+        meta.className = 'recent-meta';
+        const binderName = binders.find((b) => b.id === card.binderId)?.name || 'Binder';
+        meta.textContent = `${card.location} · ${formatDisplayDate(card.dateSeen)} · ${binderName}`;
+
+        main.appendChild(title);
+        main.appendChild(meta);
+
+        const badge = document.createElement('span');
+        badge.className = 'badge-pill';
+        badge.textContent = card.cardNumber;
+
+        item.appendChild(thumb);
+        item.appendChild(main);
+        item.appendChild(badge);
+
+        container.appendChild(item);
+      });
+    }
+
+    function renderHighlightBadges() {
+      const row = document.getElementById('highlightBadgesRow');
+      row.innerHTML = '';
+      const unlocked = badgesConfig.filter((b) => b.isUnlocked(cards));
+      const toShow = unlocked.slice(0, 3);
+      if (!toShow.length) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'empty-state';
+        placeholder.textContent = 'Mint a card to start unlocking BirdBinder achievement badges.';
+        row.appendChild(placeholder);
+        return;
+      }
+
+      toShow.forEach((badge) => {
+        const card = document.createElement('div');
+        card.className = 'badge-card';
+
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.justifyContent = 'space-between';
+        topRow.style.alignItems = 'center';
+
+        const name = document.createElement('div');
+        name.className = 'badge-name';
+        name.textContent = badge.name;
+
+        const icon = document.createElement('div');
+        icon.className = 'badge-icon';
+        icon.textContent = badge.icon;
+
+        topRow.appendChild(name);
+        topRow.appendChild(icon);
+
+        const desc = document.createElement('div');
+        desc.className = 'badge-desc';
+        desc.textContent = badge.description;
+
+        card.appendChild(topRow);
+        card.appendChild(desc);
+        row.appendChild(card);
+      });
+    }
+
+    function initUploadFlow() {
+      const dropzone = document.getElementById('uploadDropzone');
+      const btnChooseFile = document.getElementById('btnChooseFile');
+      const btnUseCamera = document.getElementById('btnUseCamera');
+      const fileInput = document.getElementById('fileInput');
+      const photoPreview = document.getElementById('photoPreview');
+      const photoPlaceholder = document.getElementById('photoPlaceholder');
+      const photoMetaLabel = document.getElementById('photoMetaLabel');
+      const photoMetaTag = document.getElementById('photoMetaTag');
+      const btnAnalyze = document.getElementById('btnAnalyze');
+      const loadingStrip = document.getElementById('aiLoadingStrip');
+
+      function resetLoading() {
+        loadingStrip.style.display = 'none';
+      }
+
+      function handleFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          currentPhotoDataUrl = e.target.result;
+          photoPreview.src = currentPhotoDataUrl;
+          photoPreview.style.display = 'block';
+          photoPlaceholder.style.display = 'none';
+          photoMetaLabel.textContent = file.name ? `Loaded ${file.name}` : 'Camera capture ready';
+          photoMetaTag.querySelector('span:nth-child(2)').textContent = 'Tap Suggest species to continue';
+        };
+        reader.readAsDataURL(file);
+      }
+
+      dropzone.addEventListener('click', () => {
+        fileInput.removeAttribute('capture');
+        fileInput.click();
+      });
+
+      btnChooseFile.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.removeAttribute('capture');
+        fileInput.click();
+      });
+
+      btnUseCamera.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.setAttribute('capture', 'environment');
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        handleFile(file);
+      });
+
+      btnAnalyze.addEventListener('click', () => {
+        if (!currentPhotoDataUrl) {
+          alert('Add a photo of your bird first.');
+          return;
+        }
+        loadingStrip.style.display = 'block';
+        setTimeout(() => {
+          resetLoading();
+          generateSuggestions();
+          navigate('identify');
+          syncIdentifyPreview();
+        }, 1100 + Math.random() * 900);
+      });
+
+      resetLoading();
+    }
+
+    function generateSuggestions() {
+      const shuffled = [...suggestionPool].sort(() => Math.random() - 0.5);
+      suggestions = shuffled.slice(0, 3).map((s, index) => ({
+        ...s,
+        confidence: 82 + (3 - index) * 5 + Math.floor(Math.random() * 3),
+      }));
+      selectedSuggestionIndex = null;
+      renderSuggestions();
+      populateBinderSelect();
+    }
+
+    function renderSuggestions() {
+      const grid = document.getElementById('suggestionsGrid');
+      grid.innerHTML = '';
+      suggestions.forEach((s, index) => {
+        const card = document.createElement('div');
+        card.className = 'suggestion-card';
+        card.addEventListener('click', () => {
+          selectedSuggestionIndex = index;
+          document.querySelectorAll('.suggestion-card').forEach((el, idx) => {
+            el.classList.toggle('selected', idx === index);
+          });
+          document.getElementById('btnConfirmCard').disabled = false;
+          syncIdentifyPreview();
+          autoSelectBinderForCategory(s.category);
+        });
+
+        const name = document.createElement('div');
+        name.className = 'suggestion-name';
+        name.textContent = s.speciesName;
+
+        const latin = document.createElement('div');
+        latin.className = 'suggestion-latin';
+        latin.textContent = s.scientificName;
+
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.justifyContent = 'space-between';
+        topRow.style.alignItems = 'center';
+        topRow.style.gap = '4px';
+
+        const rarity = document.createElement('span');
+        const rarityKeyVal = rarityKey(s.rarity);
+        rarity.className = `rarity-pill ${rarityKeyVal}`;
+        rarity.textContent = s.rarity;
+
+        const category = document.createElement('span');
+        category.className = 'category-pill';
+        category.textContent = s.category;
+
+        topRow.appendChild(rarity);
+        topRow.appendChild(category);
+
+        const confidenceRow = document.createElement('div');
+        confidenceRow.className = 'confidence-row';
+        const label = document.createElement('span');
+        label.textContent = 'Confidence';
+        const value = document.createElement('span');
+        value.textContent = `${s.confidence}%`;
+        confidenceRow.appendChild(label);
+        confidenceRow.appendChild(value);
+
+        const barWrap = document.createElement('div');
+        barWrap.className = 'confidence-bar-wrap';
+        const bar = document.createElement('div');
+        bar.className = 'confidence-bar';
+        bar.style.width = `${Math.min(s.confidence, 100)}%`;
+        barWrap.appendChild(bar);
+
+        card.appendChild(name);
+        card.appendChild(latin);
+        card.appendChild(topRow);
+        card.appendChild(confidenceRow);
+        card.appendChild(barWrap);
+
+        grid.appendChild(card);
+      });
+
+      document.getElementById('btnConfirmCard').disabled = true;
+      document.getElementById('identifyMetaLabel').textContent = 'Tap the best match above to finalize your card.';
+    }
+
+    function syncIdentifyPreview() {
+      const img = document.getElementById('photoPreviewIdentify');
+      if (currentPhotoDataUrl) {
+        img.src = currentPhotoDataUrl;
+        img.style.display = 'block';
+      } else {
+        img.style.display = 'none';
+      }
+    }
+
+    function populateBinderSelect() {
+      const select = document.getElementById('selectBinder');
+      select.innerHTML = '';
+      binders.forEach((binder) => {
+        const option = document.createElement('option');
+        option.value = binder.id;
+        option.textContent = binder.name;
+        select.appendChild(option);
+      });
+      select.value = currentBinderId || 'songbirds';
+    }
+
+    function autoSelectBinderForCategory(category) {
+      const select = document.getElementById('selectBinder');
+      let binderId = 'songbirds';
+      if (category === 'Raptor') binderId = 'raptors';
+      if (category === 'Water') binderId = 'water';
+      select.value = binderId;
+    }
+
+    function initIdentifyFlow() {
+      const btnConfirm = document.getElementById('btnConfirmCard');
+      btnConfirm.addEventListener('click', () => {
+        if (selectedSuggestionIndex == null) return;
+        const suggestion = suggestions[selectedSuggestionIndex];
+        const binderId = document.getElementById('selectBinder').value;
+        const extraCardNotes = document.getElementById('inputCardNotes').value.trim();
+
+        const location = document.getElementById('inputLocation').value.trim() || 'Unspecified location';
+        const dateSeen = document.getElementById('inputDate').value || new Date().toISOString().slice(0, 10);
+        const notes = document.getElementById('inputNotes').value.trim() || 'Field notes not provided in this sighting.';
+
+        const newId = `c${cards.length + 1}`;
+        const binderPrefix = binderId === 'songbirds' ? 'S' : binderId === 'raptors' ? 'R' : 'W';
+        const newCardNumber = `BB-${binderPrefix}${String(cards.filter((c) => c.binderId === binderId).length + 1).padStart(3, '0')}`;
+
+        const imgStyle = generateStylizedGradientForCategory(suggestion.category);
+
+        const newCard = {
+          id: newId,
+          speciesName: suggestion.speciesName,
+          scientificName: suggestion.scientificName,
+          rarity: suggestion.rarity,
+          category: suggestion.category,
+          image: imgStyle,
+          location,
+          dateSeen,
+          notes,
+          extraNotes: extraCardNotes || 'Minted via BirdBinder demo identification flow.',
+          confidence: suggestion.confidence,
+          binderId,
+          cardNumber: newCardNumber,
+          createdAt: new Date().toISOString(),
+          photo: currentPhotoDataUrl,
+        };
+
+        cards = [...cards, newCard];
+        currentCardId = newCard.id;
+        currentBinderId = binderId;
+
+        document.getElementById('inputLocation').value = '';
+        document.getElementById('inputDate').value = '';
+        document.getElementById('inputNotes').value = '';
+        document.getElementById('inputCardNotes').value = '';
+        currentPhotoDataUrl = null;
+
+        const photoPreview = document.getElementById('photoPreview');
+        const photoPlaceholder = document.getElementById('photoPlaceholder');
+        const photoMetaLabel = document.getElementById('photoMetaLabel');
+        const photoMetaTag = document.getElementById('photoMetaTag');
+        photoPreview.src = '';
+        photoPreview.style.display = 'none';
+        photoPlaceholder.style.display = 'block';
+        photoMetaLabel.textContent = 'No photo yet';
+        photoMetaTag.querySelector('span:nth-child(2)').textContent = 'Ready to analyze';
+
+        navigate('cardDetail');
+      });
+    }
+
+    function generateStylizedGradientForCategory(category) {
+      if (category === 'Raptor') {
+        return 'linear-gradient(135deg,#f97316,#92400e,#020617)';
+      }
+      if (category === 'Water') {
+        return 'linear-gradient(135deg,#38bdf8,#0f172a,#020617)';
+      }
+      return 'linear-gradient(135deg,#4ade80,#22c55e,#065f46)';
+    }
+
+    function openCard(cardId) {
+      currentCardId = cardId;
+      const card = cards.find((c) => c.id === cardId);
+      if (card) {
+        currentBinderId = card.binderId;
+      }
+      navigate('cardDetail');
+    }
+
+    function renderCardDetail() {
+      const card = cards.find((c) => c.id === currentCardId) || cards[cards.length - 1];
+      if (!card) return;
+
+      const shell = document.getElementById('cardShell');
+      shell.innerHTML = '';
+
+      const binderName = binders.find((b) => b.id === card.binderId)?.name || 'Binder';
+      document.getElementById('cardDetailSubtitle').textContent = `From: ${binderName}`;
+
+      const header = document.createElement('div');
+      header.className = 'card-header';
+
+      const titleBlock = document.createElement('div');
+      titleBlock.className = 'card-title-block';
+
+      const title = document.createElement('div');
+      title.className = 'card-title';
+      title.textContent = card.speciesName;
+
+      const subtitle = document.createElement('div');
+      subtitle.className = 'card-subtitle';
+      subtitle.textContent = card.scientificName;
+
+      titleBlock.appendChild(title);
+      titleBlock.appendChild(subtitle);
+
+      const tags = document.createElement('div');
+      tags.className = 'card-tags';
+
+      const rarity = document.createElement('span');
+      rarity.className = `rarity-pill ${rarityKey(card.rarity)}`;
+      rarity.textContent = card.rarity;
+
+      const cardNo = document.createElement('span');
+      cardNo.className = 'badge-pill';
+      cardNo.textContent = card.cardNumber;
+
+      tags.appendChild(rarity);
+      tags.appendChild(cardNo);
+
+      header.appendChild(titleBlock);
+      header.appendChild(tags);
+
+      const artFrame = document.createElement('div');
+      artFrame.className = 'card-art-frame';
+      artFrame.style.backgroundImage = card.image;
+
+      if (card.photo) {
+        const photo = document.createElement('img');
+        photo.className = 'card-art-photo';
+        photo.src = card.photo;
+        artFrame.appendChild(photo);
+      }
+
+      const overlay = document.createElement('div');
+      overlay.className = 'card-art-overlay';
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'card-art-icon';
+      const iconSpan = document.createElement('span');
+      iconSpan.textContent = pickIconForCategory(card.category);
+      const ring = document.createElement('div');
+      ring.className = 'card-art-ring';
+      iconWrap.appendChild(iconSpan);
+      iconWrap.appendChild(ring);
+
+      artFrame.appendChild(overlay);
+      artFrame.appendChild(iconWrap);
+
+      const metaGrid = document.createElement('div');
+      metaGrid.className = 'card-meta-grid';
+
+      const metaLocation = createMetaItem('Location', card.location);
+      const metaDate = createMetaItem('Date seen', formatDisplayDate(card.dateSeen));
+      const metaBinder = createMetaItem('Binder', binderName);
+      const metaConfidence = createMetaItem('Confidence', `${card.confidence}%`);
+
+      metaGrid.appendChild(metaLocation);
+      metaGrid.appendChild(metaDate);
+      metaGrid.appendChild(metaBinder);
+      metaGrid.appendChild(metaConfidence);
+
+      const notes = document.createElement('div');
+      notes.className = 'card-notes';
+      notes.textContent = `${card.notes}\n\n${card.extraNotes || ''}`.trim();
+
+      shell.appendChild(header);
+      shell.appendChild(artFrame);
+      shell.appendChild(metaGrid);
+      shell.appendChild(notes);
+    }
+
+    function createMetaItem(label, value) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'card-meta-item';
+      const lbl = document.createElement('div');
+      lbl.className = 'card-meta-label';
+      lbl.textContent = label;
+      const val = document.createElement('div');
+      val.className = 'card-meta-value';
+      val.textContent = value;
+      wrapper.appendChild(lbl);
+      wrapper.appendChild(val);
+      return wrapper;
+    }
+
+    function pickIconForCategory(category) {
+      if (category === 'Raptor') return '🦅';
+      if (category === 'Water') return '🦆';
+      return '🐦';
+    }
+
+    function refreshBinderTabs() {
+      const container = document.getElementById('binderTabs');
+      container.innerHTML = '';
+      binders.forEach((binder) => {
+        const count = cards.filter((c) => c.binderId === binder.id).length;
+        const tab = document.createElement('div');
+        tab.className = 'binder-tab' + (binder.id === currentBinderId ? ' active' : '');
+        tab.style.borderColor = binder.id === currentBinderId ? 'rgba(159,210,106,0.96)' : 'rgba(255,255,255,0.12)';
+        tab.addEventListener('click', () => {
+          currentBinderId = binder.id;
+          refreshBinderTabs();
+          refreshBinderGrid();
+        });
+
+        const name = document.createElement('div');
+        name.className = 'binder-tab-name';
+        name.textContent = binder.name;
+
+        const meta = document.createElement('div');
+        meta.className = 'binder-tab-meta';
+        meta.textContent = `${count} / ${binder.capacity} cards`;
+
+        tab.appendChild(name);
+        tab.appendChild(meta);
+        container.appendChild(tab);
+      });
+    }
+
+    function refreshBinderGrid() {
+      const binder = binders.find((b) => b.id === currentBinderId) || binders[0];
+      if (!binder) return;
+
+      const cardsInBinder = cards.filter((c) => c.binderId === binder.id);
+      let filteredCards = cardsInBinder;
+      if (currentFilter !== 'all') {
+        filteredCards = cardsInBinder.filter((c) => rarityKey(c.rarity) === currentFilter);
+      }
+
+      const grid = document.getElementById('binderGrid');
+      grid.innerHTML = '';
+
+      const totalSlots = binder.capacity;
+      const filledSlots = cardsInBinder.length;
+      const completion = totalSlots ? Math.round((filledSlots / totalSlots) * 100) : 0;
+
+      document.getElementById('binderChipLabel').textContent = binder.name;
+      document.getElementById('binderSummaryTitle').textContent = binder.name;
+      document.getElementById('binderSummaryMeta').textContent = `${filledSlots} of ${totalSlots} slots filled · ${completion}% complete`;
+      document.getElementById('binderProgressBar').style.transform = `scaleX(${Math.min(completion / 100, 1)})`;
+
+      const filterButtons = document.querySelectorAll('.filter-chip');
+      filterButtons.forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.filter === currentFilter);
+        btn.onclick = () => {
+          currentFilter = btn.dataset.filter;
+          refreshBinderGrid();
+        };
+      });
+
+      const visibleCards = filteredCards;
+
+      for (let i = 0; i < totalSlots; i++) {
+        const slotDiv = document.createElement('div');
+        const card = visibleCards[i];
+        if (card) {
+          slotDiv.className = 'slot-card filled';
+          const inner = document.createElement('div');
+          inner.className = 'slot-inner';
+
+          const art = document.createElement('div');
+          art.className = 'slot-art';
+          art.style.backgroundImage = card.image;
+
+          const footer = document.createElement('div');
+          footer.className = 'slot-footer';
+
+          const title = document.createElement('div');
+          title.className = 'slot-title';
+          title.textContent = card.speciesName;
+
+          const metaRow = document.createElement('div');
+          metaRow.className = 'slot-meta-row';
+
+          const rarityDot = document.createElement('div');
+          rarityDot.className = 'slot-rarity-dot';
+          rarityDot.style.backgroundColor = rarityColor(card.rarity);
+
+          const cardNum = document.createElement('div');
+          cardNum.className = 'slot-card-number';
+          cardNum.textContent = card.cardNumber;
+
+          metaRow.appendChild(rarityDot);
+          metaRow.appendChild(cardNum);
+
+          footer.appendChild(title);
+          footer.appendChild(metaRow);
+
+          inner.appendChild(art);
+          inner.appendChild(footer);
+
+          slotDiv.appendChild(inner);
+          slotDiv.addEventListener('click', () => openCard(card.id));
+        } else {
+          slotDiv.className = 'slot-card empty';
+          const inner = document.createElement('div');
+          inner.className = 'slot-inner';
+          const label = document.createElement('div');
+          label.className = 'slot-empty-label';
+          label.textContent = 'Empty slot';
+          inner.appendChild(label);
+          slotDiv.appendChild(inner);
+        }
+        grid.appendChild(slotDiv);
+      }
+    }
+
+    function refreshProgress() {
+      const totalCards = cards.length;
+      const totalSlots = binders.reduce((sum, b) => sum + b.capacity, 0);
+      const uniqueSpecies = new Set(cards.map((c) => c.speciesName)).size;
+
+      const rarityCounts = cards.reduce(
+        (acc, card) => {
+          const key = rarityKey(card.rarity);
+          if (acc[key] != null) acc[key] += 1;
+          return acc;
+        },
+        { common: 0, uncommon: 0, rare: 0, legendary: 0 }
+      );
+
+      const completedBinders = binders.filter((binder) => cards.filter((c) => c.binderId === binder.id).length >= binder.capacity).length;
+
+      document.getElementById('progressCards').textContent = totalCards;
+      document.getElementById('progressSpecies').textContent = uniqueSpecies;
+      document.getElementById('progressBinders').textContent = `${completedBinders} of ${binders.length}`;
+      document.getElementById('progressRarity').textContent = `${rarityCounts.common} C · ${rarityCounts.uncommon} U · ${rarityCounts.rare} R · ${rarityCounts.legendary} L`;
+
+      const cardsBar = document.getElementById('progressCardsBar');
+      const speciesBar = document.getElementById('progressSpeciesBar');
+      const bindersBar = document.getElementById('progressBindersBar');
+      const cardCompletion = totalSlots ? Math.min(totalCards / totalSlots, 1) : 0;
+      const speciesCompletion = totalCards ? Math.min(uniqueSpecies / totalSlots, 1) : 0;
+      const binderCompletion = binders.length ? Math.min(completedBinders / binders.length, 1) : 0;
+      cardsBar.style.transform = `scaleX(${cardCompletion})`;
+      speciesBar.style.transform = `scaleX(${speciesCompletion})`;
+      bindersBar.style.transform = `scaleX(${binderCompletion})`;
+
+      renderBinderProgressRows();
+      renderBadgesGrid();
+    }
+
+    function renderBinderProgressRows() {
+      const container = document.getElementById('binderProgressList');
+      container.innerHTML = '';
+      const rows = getBinderLeaderboardData();
+      rows.forEach(({ binder, count, completion }) => {
+        const row = document.createElement('div');
+        row.className = 'recent-item';
+        row.addEventListener('click', () => {
+          currentBinderId = binder.id;
+          navigate('binder');
+        });
+
+        const badge = document.createElement('div');
+        badge.className = 'recent-thumb';
+        badge.style.backgroundImage = `radial-gradient(circle at top, ${binder.color}, #020617)`;
+
+        const main = document.createElement('div');
+        main.className = 'recent-main';
+
+        const title = document.createElement('div');
+        title.className = 'recent-title';
+        title.textContent = binder.name;
+
+        const meta = document.createElement('div');
+        meta.className = 'recent-meta';
+        meta.textContent = `${count} / ${binder.capacity} slots · ${completion}% complete`;
+
+        const barWrap = document.createElement('div');
+        barWrap.className = 'confidence-bar-wrap';
+        const bar = document.createElement('div');
+        bar.className = 'confidence-bar';
+        bar.style.width = `${Math.min(completion, 100)}%`;
+        barWrap.appendChild(bar);
+
+        main.appendChild(title);
+        main.appendChild(meta);
+        main.appendChild(barWrap);
+
+        const pill = document.createElement('span');
+        pill.className = 'badge-pill';
+        pill.textContent = binders.indexOf(binder) === 0 ? 'Core binder' : 'Side binder';
+
+        row.appendChild(badge);
+        row.appendChild(main);
+        row.appendChild(pill);
+
+        container.appendChild(row);
+      });
+    }
+
+    function renderBadgesGrid() {
+      const grid = document.getElementById('badgesGrid');
+      grid.innerHTML = '';
+      badgesConfig.forEach((badge) => {
+        const unlocked = badge.isUnlocked(cards);
+        const card = document.createElement('div');
+        card.className = 'badge-card' + (unlocked ? '' : ' locked');
+
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.justifyContent = 'space-between';
+        topRow.style.alignItems = 'center';
+
+        const name = document.createElement('div');
+        name.className = 'badge-name';
+        name.textContent = badge.name;
+
+        const icon = document.createElement('div');
+        icon.className = 'badge-icon';
+        icon.textContent = badge.icon;
+
+        topRow.appendChild(name);
+        topRow.appendChild(icon);
+
+        const desc = document.createElement('div');
+        desc.className = 'badge-desc';
+        desc.textContent = badge.description;
+
+        const status = document.createElement('div');
+        status.className = 'badge-status';
+        const dot = document.createElement('div');
+        dot.className = unlocked ? 'badge-dot-unlocked' : 'badge-dot-locked';
+        const label = document.createElement('span');
+        label.textContent = unlocked ? 'Unlocked' : 'Locked';
+        status.appendChild(dot);
+        status.appendChild(label);
+
+        card.appendChild(topRow);
+        card.appendChild(desc);
+        card.appendChild(status);
+
+        grid.appendChild(card);
+      });
+    }
+
+    function formatDisplayDate(dateStr) {
+      if (!dateStr) return 'Unknown date';
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return dateStr;
+      const month = d.toLocaleString('default', { month: 'short' });
+      return `${month} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
+    }
+
+    function initDatePrefill() {
+      const inputDate = document.getElementById('inputDate');
+      const today = new Date().toISOString().slice(0, 10);
+      inputDate.value = today;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initNavigation();
+      initUploadFlow();
+      initIdentifyFlow();
+      initDatePrefill();
+      refreshHome();
+    });
+  </script>
+</body>
+</html>
