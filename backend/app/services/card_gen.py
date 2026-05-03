@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -6,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.huey_instance import huey
+
+logger = logging.getLogger(__name__)
 
 # NOTE: Huey tasks run synchronously, so we use synchronous SQLAlchemy for DB access
 _sync_db_url = settings.database_url.replace("sqlite+aiosqlite", "sqlite")
@@ -18,6 +21,7 @@ The image should show the bird prominently with a clean background suitable for 
 
 def _run_card_generation(job_id: str, sighting_id: str):
     """Huey task: generate card art for a sighting."""
+    import asyncio
     from app.models.card import Card
     from app.models.enums import JobStatus
     from app.models.job import Job
@@ -35,13 +39,23 @@ def _run_card_generation(job_id: str, sighting_id: str):
             if not sighting:
                 raise ValueError(f"Sighting {sighting_id} not found")
 
-            # Determine card art URL
+            # Get rarity tier (needed for species_info and card creation)
+            rarity_tier = "common"
+            try:
+                from app.services.rarity import get_rarity_tier
+                rarity_tier = get_rarity_tier(sighting.species_code)
+            except ImportError:
+                pass
+
+            # Determine card art path
             card_art_url = None
             if settings.ai_api_key:
-                # Try AI-generated card art
                 try:
-                    import asyncio
                     from app.services.ai import generate_card_art
+
+                    image_path = ""
+                    if sighting.photo_path:
+                        image_path = str(get_file_path(sighting.photo_path))
 
                     species_info = {
                         "common_name": sighting.species_common or "Unknown",
@@ -49,28 +63,20 @@ def _run_card_generation(job_id: str, sighting_id: str):
                         "pose_variant": sighting.pose_variant or "perching",
                         "rarity_tier": rarity_tier,
                     }
-                    art_path = asyncio.get_event_loop().run_until_complete(
+                    art_path = asyncio.run(
                         generate_card_art(
-                            image_path=sighting.photo_path or "",
+                            image_path=image_path,
                             species_info=species_info,
                         )
                     )
                     if art_path:
-                        card_art_url = f"/api/storage/{art_path}"
-                except Exception:
-                    card_art_url = None
+                        card_art_url = f"/storage/{art_path}"
+                except Exception as e:
+                    logger.warning("AI card art generation failed: %s", e, exc_info=True)
 
             # Fallback: use original photo
             if not card_art_url and sighting.photo_path:
-                card_art_url = f"/api/storage/{sighting.photo_path}"
-
-            # Get rarity tier
-            rarity_tier = "common"
-            try:
-                from app.services.rarity import get_rarity_tier
-                rarity_tier = get_rarity_tier(sighting.species_code)
-            except ImportError:
-                pass
+                card_art_url = f"/storage/{sighting.photo_path}"
 
             # Create card
             card = Card(
