@@ -75,7 +75,11 @@ All config via environment variables (or `.env` file):
 | `STORAGE_PATH` | `./storage` | Directory for uploaded images and card art |
 | `EBIRD_API_KEY` | — | eBird API key (optional, for data enrichment) |
 
-## Development
+## User Guide
+
+See [USER_GUIDE.md](USER_GUIDE.md) for end-user documentation — uploading sightings, collecting cards, binders, sets, and trading.
+
+## Project Structure
 
 ### Backend
 
