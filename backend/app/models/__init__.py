@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.activity import Activity
 from app.models.like import Like
 from app.models.comment import Comment
+from app.models.app_setting import AppSetting
 
 __all__ = [
     "Sighting",
@@ -29,4 +30,5 @@ __all__ = [
     "Activity",
     "Like",
     "Comment",
+    "AppSetting",
 ]
