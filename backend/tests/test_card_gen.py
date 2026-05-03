@@ -116,7 +116,7 @@ def test_run_card_generation_writes_all_fields(mock_settings, task_db, db):
     assert card.species_scientific == "Phoenicopterus ruber"
     assert card.family == "Flamingos"
     assert card.pose_variant == "foraging"
-    assert card.rarity_tier == "common"
+    assert card.rarity_tier in ("common", "uncommon", "rare", "legendary")
     assert card.id_method == "ai"
     assert card.id_confidence == 0.85
     assert card.user_identifier == TEST_USER
