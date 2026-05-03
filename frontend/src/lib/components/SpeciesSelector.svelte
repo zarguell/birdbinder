@@ -178,7 +178,7 @@
 					<button
 						type="button"
 						class="w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors border-b border-gray-800/50 last:border-b-0"
-						onmousedown|preventDefault={() => selectSpecies(speciesItem)}
+						onmousedown={(e) => { e.preventDefault(); selectSpecies(speciesItem); }}
 					>
 						<span class="text-sm font-medium text-gray-200">{speciesItem.common_name}</span>
 						<span class="ml-2 text-xs text-gray-500 italic">{speciesItem.scientific_name}</span>
