@@ -1,6 +1,7 @@
 """Tests for app.services.ai — vision model calls, card art generation, prompt building."""
 
 import base64
+import httpx
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
@@ -208,6 +209,157 @@ async def test_call_vision_model_empty_content_raises(mock_settings, fake_image)
         pytest.raises(ValueError, match="empty content"),
     ):
         await call_vision_model(str(fake_image), "test")
+
+
+@patch("app.services.ai.settings")
+async def test_call_vision_model_reasoning_fallback(mock_settings, fake_image):
+    """When content is empty but reasoning has text, follow-up call extracts JSON."""
+    mock_settings.ai_api_key = "test-key"
+    mock_settings.ai_base_url = "https://fake-ai.example.com/v1"
+    mock_settings.ai_model = "gpt-4o"
+
+    # First call: empty content, but reasoning field has analysis
+    reasoning_text = "This is clearly a flamingo. American Flamingo, Phoenicopterus ruber."
+    first_response = {
+        "choices": [{
+            "message": {"content": "", "reasoning": reasoning_text}
+        }]
+    }
+    # Second call (follow-up): returns proper JSON
+    second_response = {
+        "choices": [{
+            "message": {"content": '{"common_name": "American Flamingo", "scientific_name": "Phoenicopterus ruber", "family": "Flamingos", "confidence": 0.85, "distinguishing_traits": ["pink plumage", "long neck"], "pose_variant": "foraging"}'}
+        }]
+    }
+    mock_post = AsyncMock(
+        side_effect=[
+            MagicMock(status_code=200, json=lambda: first_response, raise_for_status=MagicMock()),
+            MagicMock(status_code=200, json=lambda: second_response, raise_for_status=MagicMock()),
+        ]
+    )
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_post
+
+    with (
+        patch("app.services.ai.httpx.AsyncClient", return_value=mock_client),
+        patch("app.services.ai.logger") as mock_logger,
+    ):
+        result = await call_vision_model(str(fake_image), "Identify this bird:")
+
+    assert result == '{"common_name": "American Flamingo", "scientific_name": "Phoenicopterus ruber", "family": "Flamingos", "confidence": 0.85, "distinguishing_traits": ["pink plumage", "long neck"], "pose_variant": "foraging"}'
+    assert mock_post.call_count == 2  # original + follow-up
+    # Second call should be text-only (no image in payload)
+    second_payload = mock_post.call_args_list[1][1]["json"]
+    assert not any(
+        "image" in str(msg.get("content", ""))
+        for msg in second_payload["messages"]
+    )
+    assert "your analysis" in second_payload["messages"][1]["content"].lower()
+
+    # Verify logging of reasoning fallback
+    info_calls = [str(c) for c in mock_logger.info.call_args_list]
+    assert any("follow-up" in m for m in info_calls)
+
+
+@patch("app.services.ai.settings")
+async def test_call_vision_model_reasoning_fallback_also_empty(mock_settings, fake_image):
+    """When both content and reasoning are empty, ValueError is raised."""
+    mock_settings.ai_api_key = "test-key"
+    mock_settings.ai_base_url = None
+    mock_settings.ai_model = "gpt-4o"
+
+    reasoning_text = "Analyzing the image..."
+    first_response = {
+        "choices": [{
+            "message": {"content": "", "reasoning": reasoning_text}
+        }]
+    }
+    # Follow-up also returns empty
+    second_response = {
+        "choices": [{"message": {"content": ""}}]
+    }
+    mock_post = AsyncMock(
+        side_effect=[
+            MagicMock(status_code=200, json=lambda: first_response, raise_for_status=MagicMock()),
+            MagicMock(status_code=200, json=lambda: second_response, raise_for_status=MagicMock()),
+        ]
+    )
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_post
+
+    with (
+        patch("app.services.ai.httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(ValueError, match="empty content"),
+    ):
+        await call_vision_model(str(fake_image), "test")
+
+
+@patch("app.services.ai.settings")
+async def test_call_vision_model_reasoning_fallback_network_error(mock_settings, fake_image):
+    """When follow-up call fails, ValueError is still raised."""
+    mock_settings.ai_api_key = "test-key"
+    mock_settings.ai_base_url = None
+    mock_settings.ai_model = "gpt-4o"
+
+    reasoning_text = "It's a robin."
+    first_response = {
+        "choices": [{
+            "message": {"content": "", "reasoning": reasoning_text}
+        }]
+    }
+    mock_post = AsyncMock(
+        side_effect=[
+            MagicMock(status_code=200, json=lambda: first_response, raise_for_status=MagicMock()),
+            httpx.ConnectError("Network error"),
+        ]
+    )
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_post
+
+    with (
+        patch("app.services.ai.httpx.AsyncClient", return_value=mock_client),
+        patch("app.services.ai.logger"),
+        pytest.raises(ValueError, match="empty content"),
+    ):
+        await call_vision_model(str(fake_image), "test")
+
+
+@patch("app.services.ai.settings")
+@patch("app.services.ai._extract_json_from_reasoning", new_callable=AsyncMock, return_value="")
+async def test_call_vision_model_empty_content_no_reasoning_raises(mock_settings, mock_extract, fake_image):
+    """Empty content with NO reasoning field still raises ValueError directly."""
+    mock_settings.ai_api_key = "test-key"
+    mock_settings.ai_base_url = None
+    mock_settings.ai_model = "gpt-4o"
+
+    fake_response = {"choices": [{"message": {"content": ""}}]}
+    mock_post = AsyncMock(return_value=MagicMock(
+        status_code=200, json=lambda: fake_response,
+    ))
+    mock_post.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_post
+
+    with (
+        patch("app.services.ai.httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(ValueError, match="empty content"),
+    ):
+        await call_vision_model(str(fake_image), "test")
+
+    # Should NOT have called the follow-up (no reasoning to extract from)
+    mock_extract.assert_not_called()
 
 
 @patch("app.services.ai.settings")

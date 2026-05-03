@@ -85,13 +85,15 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
                 ],
             },
         ],
-        "max_tokens": 500,
+        # Reasoning models (Kimi K2, etc.) burn tokens on chain-of-thought,
+        # so we need a generous budget. 4096 is enough for reasoning + JSON output.
+        "max_tokens": 4096,
         "response_format": {"type": "json_object"},
     }
 
     t0 = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{base_url}/chat/completions", headers=headers, json=payload
             )
@@ -99,7 +101,21 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
             resp.raise_for_status()
             resp_json = resp.json()
             logger.info("AI vision response JSON: %s", resp_json)
-            content = resp_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+            message = resp_json.get("choices", [{}])[0].get("message", {})
+            content = message.get("content", "")
+            reasoning = message.get("reasoning", "")
+
+            # Reasoning models (e.g., Kimi K2) may put analysis in "reasoning"
+            # field and leave "content" empty. If so, make a follow-up text-only
+            # call asking the model to convert its reasoning into JSON.
+            if not content and reasoning:
+                logger.info(
+                    "AI returned empty content with %d chars of reasoning — "
+                    "making follow-up text call to extract JSON",
+                    len(reasoning),
+                )
+                content = await _extract_json_from_reasoning(reasoning, prompt)
+
             if not content:
                 raise ValueError(
                     f"AI returned empty content. Full response: {resp_json}"
@@ -120,6 +136,70 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
         elapsed = time.monotonic() - t0
         logger.error("AI vision error after %.1fs: %s", elapsed, e)
         raise
+
+
+async def _extract_json_from_reasoning(reasoning: str, original_prompt: str) -> str:
+    """Make a text-only follow-up call to convert reasoning into JSON.
+
+    Some reasoning models (e.g., Kimi K2) spend all output tokens on reasoning
+    and leave content empty. We re-send the reasoning as a user message and ask
+    for the structured JSON output we originally requested.
+    """
+    base_url = (settings.ai_base_url or "https://api.openai.com/v1").rstrip("/")
+    model = settings.ai_model
+
+    # Truncate reasoning if very long — the key conclusions are usually at the end
+    reasoning_excerpt = reasoning[-3000:] if len(reasoning) > 3000 else reasoning
+
+    follow_up_payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": original_prompt},
+            {
+                "role": "user",
+                "content": (
+                    "You already analyzed a bird photo. Here is your analysis:\n\n"
+                    f"{reasoning_excerpt}\n\n"
+                    "Now produce ONLY the JSON output as specified in your instructions. "
+                    "No explanation, no prose — just the JSON object."
+                ),
+            },
+        ],
+        "max_tokens": 500,
+        "response_format": {"type": "json_object"},
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.ai_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{base_url}/chat/completions",
+                headers=headers,
+                json=follow_up_payload,
+            )
+            resp.raise_for_status()
+            resp_json = resp.json()
+            content = resp_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                # Check reasoning of the follow-up too
+                content = resp_json.get("choices", [{}])[0].get("message", {}).get("reasoning", "")
+            if not content:
+                logger.warning(
+                    "Follow-up reasoning-to-JSON call also returned empty. "
+                    "Response: %s", resp_json,
+                )
+                return ""
+            logger.info(
+                "Follow-up call succeeded: %d chars of content", len(content),
+            )
+            return content
+    except Exception as e:
+        logger.warning("Follow-up reasoning-to-JSON call failed: %s", e)
+        return ""
 
 
 # -- Card art generation -----------------------------------------------------
