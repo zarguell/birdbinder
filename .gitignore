@@ -11,3 +11,4 @@ storage/
 backend/app/static/
 .DS_Store
 backend/data/
+backend/app/static/

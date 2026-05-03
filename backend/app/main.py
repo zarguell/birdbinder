@@ -1,4 +1,8 @@
 from fastapi import FastAPI, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
+
 from app.config import settings
 from app.dependencies import get_current_user
 from app.routers import cards, sightings, species, jobs, binders, sets, trades
@@ -22,3 +26,17 @@ async def health():
 @app.get("/api/me")
 async def me(user: str = Depends(get_current_user)):
     return {"user": user}
+
+
+# Serve frontend static assets
+static_dir = Path(__file__).parent / "static"
+assets_dir = static_dir / "assets"
+if static_dir.exists() and assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        file = static_dir / path
+        if file.is_file():
+            return FileResponse(file)
+        return FileResponse(static_dir / "index.html")
