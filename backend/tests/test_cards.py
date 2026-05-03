@@ -9,7 +9,7 @@ import pytest
 from app.models.card import Card
 from app.models.sighting import Sighting
 
-TEST_API_KEY = "***"
+TEST_API_KEY = "test-key-123"
 TEST_USER = f"api-key:{TEST_API_KEY[:8]}"
 
 

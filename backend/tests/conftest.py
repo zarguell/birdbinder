@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db import Base, get_db
@@ -29,7 +30,12 @@ def event_loop_policy():
 @pytest.fixture(scope="function")
 async def db_engine(tmp_path):
     """Create an in-memory SQLite engine for tests."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
