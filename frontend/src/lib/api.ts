@@ -36,6 +36,7 @@ export const sightings = {
 		return request<any>(`/sightings?${q}`);
 	},
 	get: (id: string) => request<any>(`/sightings/${id}`),
+	getJob: (id: string) => request<{ job: any | null }>(`/sightings/${id}/job`),
 	upload: (file: File) => {
 		const form = new FormData();
 		form.append('file', file);

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
@@ -12,6 +13,8 @@ from app.models.enums import PoseVariant
 from app.schemas.sighting import SightingRead, SightingList, SightingOverride
 from app.services.species import get_species_by_code
 from app import storage, image
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -49,8 +52,17 @@ async def create_sighting(
         file_content = await file.read()
         photo_path = storage.save_upload(file_content, sighting_id, extension)
 
-        # Extract EXIF from saved image
+        # Convert HEIC/HEIF to JPEG if needed
         abs_photo = storage.get_file_path(photo_path)
+        if image.is_heif(abs_photo):
+            try:
+                abs_photo = image.convert_heif_to_jpeg(abs_photo)
+                photo_path = f"sightings/{sighting_id}.jpg"
+                logger.info("Converted HEIF to JPEG: %s", abs_photo)
+            except ValueError:
+                logger.warning("HEIF upload but pillow-heif not installed, identification may fail")
+
+        # Extract EXIF from saved image
         exif = image.extract_exif(abs_photo)
         if exif:
             exif_camera_model = exif.get("camera_model")
@@ -89,6 +101,16 @@ async def create_sighting(
     db.add(sighting)
     await db.commit()
     await db.refresh(sighting)
+
+    # Auto-trigger identification if photo was uploaded
+    if photo_path:
+        try:
+            from app.services.identifier import start_identification
+            job_id = await start_identification(sighting_id, db)
+            logger.info("Auto-triggered identification for sighting %s (job %s)", sighting_id, job_id)
+        except Exception as e:
+            logger.warning("Failed to auto-trigger identification for %s: %s", sighting_id, e)
+
     return sighting
 
 
@@ -201,6 +223,35 @@ async def update_sighting(
     await db.commit()
     await db.refresh(sighting)
     return sighting
+
+
+@router.get("/sightings/{sighting_id}/job")
+async def get_sighting_job(
+    sighting_id: str,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the latest job status for a sighting (for polling identification progress)."""
+    result = await db.execute(
+        select(Job)
+        .where(Job.sighting_id == sighting_id, Job.type == "identify")
+        .order_by(Job.created_at.desc())
+        .limit(1)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        return {"job": None}
+    return {
+        "job": {
+            "id": job.id,
+            "type": job.type,
+            "status": job.status,
+            "error": job.error,
+            "result": job.result,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        }
+    }
 
 
 @router.post("/sightings/{sighting_id}/identify")

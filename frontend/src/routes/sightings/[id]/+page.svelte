@@ -13,8 +13,37 @@
 	let showDeleteConfirm = $state(false);
 	let actionMessage = $state('');
 	let actionMessageType: 'success' | 'error' = $state('success');
+	let jobStatus = $state<any>(null);
+	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 	let id = $derived($page.params.id);
+
+	function startPolling() {
+		stopPolling();
+		pollInterval = setInterval(async () => {
+			try {
+				const res = await sightings.getJob(id);
+				jobStatus = res.job;
+				if (jobStatus && (jobStatus.status === 'completed' || jobStatus.status === 'failed')) {
+					stopPolling();
+					await loadSighting();
+					if (jobStatus.status === 'failed') {
+						actionMessage = `Identification failed: ${jobStatus.error || 'Unknown error'}`;
+						actionMessageType = 'error';
+					} else if (jobStatus.status === 'completed') {
+						actionMessage = '';
+					}
+				}
+			} catch { /* ignore poll errors */ }
+		}, 2000);
+	}
+
+	function stopPolling() {
+		if (pollInterval) {
+			clearInterval(pollInterval);
+			pollInterval = null;
+		}
+	}
 
 	async function loadSighting() {
 		loading = true;
@@ -22,6 +51,13 @@
 		sighting = null;
 		try {
 			sighting = await sightings.get(id);
+			// Start polling if identification is in progress
+			if (sighting.identification_status === 'pending' || sighting.identification_status === 'running') {
+				startPolling();
+			} else {
+				stopPolling();
+				jobStatus = null;
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load sighting';
 		} finally {
@@ -31,6 +67,7 @@
 
 	$effect(() => {
 		if (id) loadSighting();
+		return () => stopPolling();
 	});
 
 	function formatDate(dateStr: string): string {
@@ -59,12 +96,12 @@
 	async function handleIdentify() {
 		identifying = true;
 		actionMessage = '';
+		jobStatus = null;
 		try {
 			await cards.generate(id);
-			actionMessage = 'Identification started! Card generation in progress…';
-			actionMessageType = 'success';
-			// Reload after a short delay to pick up status changes
-			setTimeout(() => loadSighting(), 3000);
+			// Reload to pick up pending status, then start polling
+			await loadSighting();
+			startPolling();
 		} catch (err) {
 			actionMessage = err instanceof Error ? err.message : 'Identification failed';
 			actionMessageType = 'error';
@@ -183,7 +220,15 @@
 								: sighting.identification_status === 'failed'
 									? 'bg-red-500/15 text-red-400 border-red-500/30'
 									: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'}">
-							{sighting.identification_status ?? 'pending'}
+							{#if sighting.identification_status === 'pending' || sighting.identification_status === 'running'}
+								<svg class="inline -mt-0.5 mr-1 h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+								</svg>
+								{sighting.identification_status === 'running' ? 'Identifying…' : 'Queued'}
+							{:else}
+								{sighting.identification_status ?? 'pending'}
+							{/if}
 						</span>
 						{#if sighting.id_method}
 							<span class="ml-2 text-xs text-gray-500">
