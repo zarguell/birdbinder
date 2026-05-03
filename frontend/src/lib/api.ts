@@ -59,7 +59,14 @@ export const sightings = {
 
 // Species
 export const species = {
-	search: (query: string) => request<any>(`/species/search?q=${encodeURIComponent(query)}`)
+	search: (query: string, params?: { family?: string; limit?: number; offset?: number }) => {
+		const q = new URLSearchParams({ q: query });
+		if (params?.family) q.set('family', params.family);
+		if (params?.limit) q.set('limit', String(params.limit));
+		if (params?.offset) q.set('offset', String(params.offset));
+		return request<any>(`/species/search?${q}`);
+	},
+	families: () => request<any>(`/species/families`)
 };
 
 // Cards

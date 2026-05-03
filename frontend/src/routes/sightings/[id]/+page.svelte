@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { sightings, cards, ApiError } from '$lib/api';
 	import SpeciesAutocomplete from '$lib/components/SpeciesAutocomplete.svelte';
+	import SpeciesSelector from '$lib/components/SpeciesSelector.svelte';
 
 	let sighting = $state<any>(null);
 	let loading = $state(true);
@@ -15,6 +16,12 @@
 	let actionMessageType: 'success' | 'error' = $state('success');
 	let jobStatus = $state<any>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	let editingLocation = $state(false);
+	let editLat = $state(0);
+	let editLon = $state(0);
+	let editDisplayName = $state('');
+	let locationError = $state('');
+	let showSpeciesSelector = $state(false);
 
 	let id = $derived($page.params.id);
 
@@ -145,11 +152,57 @@ async function handleIdentify() {
 		}
 	}
 
+	function startEditLocation() {
+		editLat = sighting.latitude ?? sighting.exif_lat ?? 0;
+		editLon = sighting.longitude ?? sighting.exif_lon ?? 0;
+		editDisplayName = sighting.location_display_name ?? '';
+		locationError = '';
+		editingLocation = true;
+	}
+
+	async function saveLocation() {
+		locationError = '';
+		if (editLat < -90 || editLat > 90) {
+			locationError = 'Latitude must be between -90 and 90';
+			return;
+		}
+		if (editLon < -180 || editLon > 180) {
+			locationError = 'Longitude must be between -180 and 180';
+			return;
+		}
+		try {
+			const updated = await sightings.update(sighting.id, {
+				latitude: editLat,
+				longitude: editLon,
+				location_display_name: editDisplayName || null,
+			});
+			Object.assign(sighting, updated);
+			editingLocation = false;
+			actionMessage = 'Location updated';
+			actionMessageType = 'success';
+		} catch (e) {
+			locationError = e instanceof Error ? e.message : 'Failed to update location';
+		}
+	}
+
 	async function handleOverride(code: string, commonName: string) {
 		actionMessage = '';
 		try {
 			sighting = await sightings.overrideSpecies(id, code, commonName);
 			actionMessage = `Species updated to ${commonName}`;
+			actionMessageType = 'success';
+		} catch (err) {
+			actionMessage = err instanceof Error ? err.message : 'Failed to override species';
+			actionMessageType = 'error';
+		}
+	}
+
+	async function overrideSpecies(species: any) {
+		actionMessage = '';
+		try {
+			sighting = await sightings.overrideSpecies(id, species.species_code, species.common_name);
+			showSpeciesSelector = false;
+			actionMessage = `Species updated to ${species.common_name}`;
 			actionMessageType = 'success';
 		} catch (err) {
 			actionMessage = err instanceof Error ? err.message : 'Failed to override species';
@@ -248,30 +301,82 @@ async function handleIdentify() {
 					</div>
 				</div>
 
-				<!-- EXIF / Location Data -->
-				<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-					<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Details</h2>
-					<dl class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<dt class="text-gray-500">Date</dt>
-							<dd class="text-gray-200 text-right">
-								{sighting.observed_at ? formatDate(sighting.observed_at) : formatDate(sighting.created_at)}
-							</dd>
-						</div>
-						<div class="flex justify-between">
-							<dt class="text-gray-500">Latitude</dt>
-							<dd class="text-gray-200 font-mono text-right">
-								{sighting.latitude != null ? sighting.latitude.toFixed(5) : '—'}
-							</dd>
-						</div>
-						<div class="flex justify-between">
-							<dt class="text-gray-500">Longitude</dt>
-							<dd class="text-gray-200 font-mono text-right">
-								{sighting.longitude != null ? sighting.longitude.toFixed(5) : '—'}
-							</dd>
-						</div>
-					</dl>
+			<!-- Details -->
+			<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
+				<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Details</h2>
+				<dl class="space-y-2 text-sm">
+					<div class="flex justify-between">
+						<dt class="text-gray-500">Date</dt>
+						<dd class="text-gray-200 text-right">
+							{sighting.observed_at ? formatDate(sighting.observed_at) : formatDate(sighting.created_at)}
+						</dd>
+					</div>
+				</dl>
+			</div>
+
+			<!-- Location -->
+			<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
+				<div class="flex items-center justify-between">
+					<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Location</h2>
+					{#if !editingLocation}
+						<button
+							onclick={startEditLocation}
+							class="text-xs text-green-400 hover:text-green-300 font-medium transition-colors"
+						>
+							Edit
+						</button>
+					{/if}
 				</div>
+				{#if editingLocation}
+					<div class="space-y-2">
+						<div class="grid grid-cols-2 gap-2">
+							<div>
+								<label class="text-xs text-gray-500">Latitude</label>
+								<input type="number" step="any" min="-90" max="90" bind:value={editLat}
+									class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200" />
+							</div>
+							<div>
+								<label class="text-xs text-gray-500">Longitude</label>
+								<input type="number" step="any" min="-180" max="180" bind:value={editLon}
+									class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200" />
+							</div>
+						</div>
+						<div>
+							<label class="text-xs text-gray-500">Location Name</label>
+							<input type="text" bind:value={editDisplayName} placeholder="e.g., Central Park, NY"
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200" />
+						</div>
+						{#if locationError}
+							<p class="text-xs text-red-400">{locationError}</p>
+						{/if}
+						<div class="flex gap-2">
+							<button onclick={saveLocation} class="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-500">Save</button>
+							<button onclick={() => editingLocation = false} class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800">Cancel</button>
+						</div>
+					</div>
+				{:else}
+					{#if sighting.latitude != null && sighting.longitude != null}
+						<dl class="space-y-2 text-sm">
+							<div class="flex justify-between">
+								<dt class="text-gray-500">Latitude</dt>
+								<dd class="text-gray-200 font-mono text-right">{sighting.latitude.toFixed(5)}</dd>
+							</div>
+							<div class="flex justify-between">
+								<dt class="text-gray-500">Longitude</dt>
+								<dd class="text-gray-200 font-mono text-right">{sighting.longitude.toFixed(5)}</dd>
+							</div>
+							{#if sighting.location_display_name}
+								<div class="flex justify-between">
+									<dt class="text-gray-500">Name</dt>
+									<dd class="text-gray-200 text-right">{sighting.location_display_name}</dd>
+								</div>
+							{/if}
+						</dl>
+					{:else}
+						<p class="text-sm text-gray-500 italic">No location</p>
+					{/if}
+				{/if}
+			</div>
 
 				<!-- Action Buttons -->
 				<div class="space-y-2.5">
@@ -336,9 +441,30 @@ async function handleIdentify() {
 
 				<!-- Manual Override -->
 				<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-					<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Manual Override</h2>
-					<SpeciesAutocomplete onSelect={handleOverride} />
-					<p class="text-xs text-gray-600">Type to search and override the species identification.</p>
+					<div class="flex items-center justify-between">
+						<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Manual Override</h2>
+						{#if !showSpeciesSelector}
+							<button
+								onclick={() => showSpeciesSelector = true}
+								class="text-xs text-green-400 hover:text-green-300 font-medium transition-colors"
+							>
+								Change Species
+							</button>
+						{:else}
+							<button
+								onclick={() => showSpeciesSelector = false}
+								class="text-xs text-gray-500 hover:text-gray-400 font-medium transition-colors"
+							>
+								Cancel
+							</button>
+						{/if}
+					</div>
+					{#if showSpeciesSelector}
+						<SpeciesSelector placeholder="Search species..." onselect={overrideSpecies} />
+						<p class="text-xs text-gray-600">Type to search and select a species. Results are grouped by family.</p>
+					{:else}
+						<p class="text-xs text-gray-600">Override the species identification with a manual selection.</p>
+					{/if}
 				</div>
 
 				<!-- Delete -->
