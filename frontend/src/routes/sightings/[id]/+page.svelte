@@ -26,6 +26,7 @@
 				jobStatus = res.job;
 				if (jobStatus && (jobStatus.status === 'completed' || jobStatus.status === 'failed')) {
 					stopPolling();
+					identifying = false;
 					await loadSighting();
 					if (jobStatus.status === 'failed') {
 						actionMessage = `Identification failed: ${jobStatus.error || 'Unknown error'}`;
@@ -92,20 +93,20 @@
 		const minutes = Math.floor((abs - degrees) * 60);
 		return `${degrees}° ${minutes}' ${val >= 0 ? dir : 'S' === dir ? 'S' : 'W'}`;
 	}
-
-	async function handleIdentify() {
+async function handleIdentify() {
+		if (identifying) return;
 		identifying = true;
 		actionMessage = '';
 		jobStatus = null;
 		try {
-			await cards.generate(id);
+			const res = await fetch(`/api/sightings/${id}/identify`, { method: 'POST' });
+			if (!res.ok) throw new ApiError(res.status, await res.text());
 			// Reload to pick up pending status, then start polling
 			await loadSighting();
 			startPolling();
 		} catch (err) {
 			actionMessage = err instanceof Error ? err.message : 'Identification failed';
 			actionMessageType = 'error';
-		} finally {
 			identifying = false;
 		}
 	}
@@ -270,20 +271,30 @@
 
 				<!-- Action Buttons -->
 				<div class="space-y-2.5">
-					{#if sighting.identification_status === 'pending'}
-						<button
-							onclick={handleIdentify}
-							disabled={identifying}
-							class="w-full flex items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
-						>
-							{#if identifying}
-								<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-								</svg>
-							{/if}
-							Identify Bird
-						</button>
+				{#if sighting.identification_status === 'pending'}
+					<button
+						disabled={true}
+						class="w-full flex items-center justify-center gap-2 rounded-lg bg-yellow-600 py-2.5 text-sm font-semibold text-white opacity-50 cursor-not-allowed"
+					>
+						<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+						</svg>
+						Queued…
+					</button>
+					{/if}
+
+					{#if sighting.identification_status === 'running'}
+					<button
+						disabled={true}
+						class="w-full flex items-center justify-center gap-2 rounded-lg bg-yellow-600 py-2.5 text-sm font-semibold text-white opacity-50 cursor-not-allowed"
+					>
+						<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+						</svg>
+						Identifying…
+					</button>
 					{/if}
 
 					{#if sighting.identification_status === 'failed'}

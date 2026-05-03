@@ -16,7 +16,7 @@ echo "Starting BirdBinder..."
 uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 UVICORN_PID=$!
 
-huey_consumer.py app.huey_instance --worker-type process --workers 2 &
+python -m huey.bin.huey_consumer app.huey_instance --worker-type process --workers 2 &
 HUEY_PID=$!
 
 # Graceful shutdown on SIGTERM

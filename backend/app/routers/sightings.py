@@ -33,16 +33,33 @@ async def create_sighting(
     file: UploadFile | None = File(default=None),
     notes: str | None = Form(default=None),
     location_display_name: str | None = Form(default=None),
+    # Client-side EXIF fallback (when browser strips EXIF before upload)
+    exif_datetime: str | None = Form(default=None),
+    exif_lat: float | None = Form(default=None),
+    exif_lon: float | None = Form(default=None),
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     sighting_id = str(uuid.uuid4())
     photo_path = None
     thumbnail_path = None
-    exif_datetime = None
-    exif_lat = None
-    exif_lon = None
+    exif_datetime_val = None
+    exif_lat_val = None
+    exif_lon_val = None
     exif_camera_model = None
+
+    # Parse client-sent EXIF as fallback
+    if exif_datetime:
+        try:
+            exif_datetime_val = datetime.strptime(exif_datetime, "%Y:%m:%d %H:%M:%S").replace(
+                tzinfo=timezone.utc
+            )
+        except (ValueError, TypeError):
+            pass
+    if exif_lat is not None:
+        exif_lat_val = exif_lat
+    if exif_lon is not None:
+        exif_lon_val = exif_lon
 
     if file and file.filename:
         # Determine extension from content type
@@ -51,9 +68,27 @@ async def create_sighting(
 
         file_content = await file.read()
         photo_path = storage.save_upload(file_content, sighting_id, extension)
+        abs_photo = storage.get_file_path(photo_path)
+
+        # Extract EXIF BEFORE any conversion (Pillow strips EXIF during save)
+        # Server-side extraction (may be empty if browser already stripped EXIF)
+        exif = image.extract_exif(abs_photo)
+        if exif:
+            exif_camera_model = exif.get("camera_model")
+            if exif_lat_val is None:
+                exif_lat_val = exif.get("lat")
+            if exif_lon_val is None:
+                exif_lon_val = exif.get("lon")
+            dt_str = exif.get("datetime")
+            if dt_str and exif_datetime_val is None:
+                try:
+                    exif_datetime_val = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").replace(
+                        tzinfo=timezone.utc
+                    )
+                except (ValueError, TypeError):
+                    pass
 
         # Convert HEIC/HEIF to JPEG if needed
-        abs_photo = storage.get_file_path(photo_path)
         if image.is_heif(abs_photo):
             try:
                 abs_photo = image.convert_heif_to_jpeg(abs_photo)
@@ -61,21 +96,6 @@ async def create_sighting(
                 logger.info("Converted HEIF to JPEG: %s", abs_photo)
             except ValueError:
                 logger.warning("HEIF upload but pillow-heif not installed, identification may fail")
-
-        # Extract EXIF from saved image
-        exif = image.extract_exif(abs_photo)
-        if exif:
-            exif_camera_model = exif.get("camera_model")
-            exif_lat = exif.get("lat")
-            exif_lon = exif.get("lon")
-            dt_str = exif.get("datetime")
-            if dt_str:
-                try:
-                    exif_datetime = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").replace(
-                        tzinfo=timezone.utc
-                    )
-                except (ValueError, TypeError):
-                    pass
 
         # Generate thumbnail
         try:
@@ -91,9 +111,9 @@ async def create_sighting(
         user_identifier=user,
         photo_path=photo_path,
         thumbnail_path=thumbnail_path,
-        exif_datetime=exif_datetime,
-        exif_lat=exif_lat,
-        exif_lon=exif_lon,
+        exif_datetime=exif_datetime_val,
+        exif_lat=exif_lat_val,
+        exif_lon=exif_lon_val,
         exif_camera_model=exif_camera_model,
         location_display_name=location_display_name,
         notes=notes,

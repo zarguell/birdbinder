@@ -113,6 +113,19 @@ async def start_identification(sighting_id: str, db) -> str:
 
     image_abs = str(get_file_path(sighting.photo_path))
 
+    # Check for existing active job (prevent duplicates)
+    from sqlalchemy import select
+    existing = (await db.execute(
+        select(Job).where(
+            Job.sighting_id == sighting_id,
+            Job.type == JobType.identify.value,
+            Job.status.in_(["pending", "running"]),
+        )
+    )).scalar_one_or_none()
+    if existing:
+        logger.info("Existing active job %s for sighting %s, skipping", existing.id, sighting_id)
+        return existing.id
+
     # Create job record
     job = Job(
         id=str(uuid.uuid4()),

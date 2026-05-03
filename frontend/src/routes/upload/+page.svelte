@@ -31,6 +31,101 @@
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
+	function readExifFromFile(file: File): Promise<{ datetime: string | null; lat: number | null; lon: number | null }> {
+		return new Promise((resolve) => {
+			const reader = new FileReader();
+			reader.onload = function (e) {
+				const buffer = e.target?.result as ArrayBuffer;
+				if (!buffer) {
+					resolve({ datetime: null, lat: null, lon: null });
+					return;
+				}
+				const view = new DataView(buffer);
+				let datetime: string | null = null;
+				let lat: number | null = null;
+				let lon: number | null = null;
+
+				if (view.byteLength < 2 || view.getUint16(0) !== 0xffd8) {
+					resolve({ datetime, lat, lon });
+					return;
+				}
+
+				let offset = 2;
+				while (offset < view.byteLength - 1) {
+					const marker = view.getUint16(offset);
+					if (marker === 0xffd9 || marker === 0xffd7) {
+						break;
+					}
+					if ((marker & 0xff00) !== 0xff00) {
+						break;
+					}
+					const length = view.getUint16(offset + 2);
+					const segment = view.getUint16(offset + 4);
+
+					if (segment === 0xe1) {
+						const exifOffset = offset + 4;
+						if (view.byteLength < exifOffset + 6) break;
+						const exifHeader = new TextDecoder().decode(
+							new Uint8Array(buffer, exifOffset, 4)
+						);
+						if (exifHeader === "Exif") {
+							const tiffOffset = exifOffset + 6;
+							const byteOrder = view.getUint16(tiffOffset);
+							const littleEndian = byteOrder === 0x4949;
+							const ifdOffset = view.getUint32(tiffOffset + 4, littleEndian);
+							const ifdStart = tiffOffset + ifdOffset;
+
+							let numEntries = view.getUint16(ifdStart, littleEndian);
+							for (let i = 0; i < numEntries; i++) {
+								const entryOffset = ifdStart + 2 + i * 12;
+								const tag = view.getUint16(entryOffset, littleEndian);
+								const type = view.getUint16(entryOffset + 2, littleEndian);
+								const numValues = view.getUint32(entryOffset + 4, littleEndian);
+
+								if (tag === 0x9003 || tag === 0x0132) {
+									const valueOffset = tiffOffset + view.getUint32(entryOffset + 8, littleEndian);
+									const strLen = type === 2 ? numValues : 2;
+									if (valueOffset + strLen <= view.byteLength) {
+										const timeStr = new TextDecoder().decode(
+											new Uint8Array(buffer, valueOffset, Math.min(19, strLen))
+										);
+										const match = timeStr.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+										if (match) {
+											datetime = `${match[1]}:${match[2]}:${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+										}
+									}
+								}
+
+				if (tag === 0x0002 || tag === 0x0004) {
+						const valueOffset = tiffOffset + view.getUint32(entryOffset + 8, littleEndian);
+						if (valueOffset + 24 <= view.byteLength) {
+							const toDecimal = (off: number): number => {
+								const deg = view.getUint32(off, littleEndian);
+								const min = view.getUint32(off + 4, littleEndian);
+								const sec = view.getUint32(off + 8, littleEndian) / view.getUint32(off + 12, littleEndian);
+								return deg + min / 60 + sec / 3600;
+							};
+							const gpsLat = toDecimal(valueOffset);
+							const gpsLon = toDecimal(valueOffset + 12);
+							const latRef = String.fromCharCode(view.getUint8(valueOffset + 20));
+							const lonRef = String.fromCharCode(view.getUint8(valueOffset + 22));
+							lat = latRef === 'S' ? -gpsLat : gpsLat;
+							lon = lonRef === 'W' ? -gpsLon : gpsLon;
+						}
+					}
+							}
+						}
+						break;
+					}
+					offset += 2 + 2 + length;
+				}
+
+				resolve({ datetime, lat, lon });
+			};
+			reader.readAsArrayBuffer(file);
+		});
+	}
+
 	async function handleUpload() {
 		if (!file || loading) return;
 
@@ -38,7 +133,9 @@
 		error = '';
 
 		try {
-			const result = await sightings.upload(file);
+			// Try to extract EXIF before upload (belt-and-suspenders with backend extraction)
+			const exif = await readExifFromFile(file);
+			const result = await sightings.upload(file, exif);
 			sightingId = result.id ?? result.sighting_id ?? null;
 			if (sightingId) {
 				goto(`/sightings/${sightingId}`);
