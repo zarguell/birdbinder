@@ -110,8 +110,9 @@ async def generate_card_art(
         style=style,
     ) + rarity_note
 
+    image_model = settings.ai_image_model or settings.ai_model
     payload = {
-        "model": settings.ai_model,
+        "model": image_model,
         "prompt": prompt,
         "n": 1,
         "size": "1024x1024",
