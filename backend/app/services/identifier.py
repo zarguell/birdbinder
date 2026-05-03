@@ -93,10 +93,16 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
                 job_id, common_name, confidence * 100,
             )
 
-            # Update sighting
+            # Update sighting with identification results
             sighting = session.get(Sighting, sighting_id)
             sighting.status = "identified"
             sighting.manual_species_override = False
+            sighting.species_common = result.get("common_name", "Unknown")
+            sighting.species_scientific = result.get("scientific_name")
+            sighting.family = result.get("family")
+            sighting.pose_variant = pose
+            sighting.id_confidence = confidence
+            sighting.id_method = "ai"
 
             # Update job
             job.status = JobStatus.completed.value
