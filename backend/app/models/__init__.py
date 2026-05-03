@@ -7,6 +7,9 @@ from app.models.job import Job, JobType, JobStatus
 from app.models.enums import SightingStatus
 from app.models.binder import Binder, BinderCard
 from app.models.user import User
+from app.models.activity import Activity
+from app.models.like import Like
+from app.models.comment import Comment
 
 __all__ = [
     "Sighting",
@@ -23,4 +26,7 @@ __all__ = [
     "Binder",
     "BinderCard",
     "User",
+    "Activity",
+    "Like",
+    "Comment",
 ]
