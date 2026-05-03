@@ -29,23 +29,35 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
     if not settings.ai_api_key:
         raise ValueError("AI API key not configured")
 
-    # Read and base64-encode the image
-    with open(image_path, "rb") as f:
-        image_data = base64.b64encode(f.read()).decode()
+    # Resize and compress image before encoding (vision APIs have payload limits)
+    from PIL import Image
+    from io import BytesIO
 
-    # Determine MIME type
-    ext = str(image_path).lower().split(".")[-1]
-    mime_map = {
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "png": "image/png",
-        "webp": "image/webp",
-    }
-    mime = mime_map.get(ext, "image/jpeg")
+    MAX_DIMENSION = 1024
+    JPEG_QUALITY = 85
+
+    with Image.open(image_path) as img:
+        orig_size = img.size
+        if max(img.size) > MAX_DIMENSION:
+            img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
+            logger.info(
+                "Resized image %s: %s -> %s",
+                image_path, orig_size, img.size,
+            )
+
+        buf = BytesIO()
+        # Convert to RGB (handles RGBA/P palettes)
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+        img.save(buf, format="JPEG", quality=JPEG_QUALITY)
+        raw_bytes = buf.getvalue()
+
+    image_data = base64.b64encode(raw_bytes).decode()
+    image_size_kb = len(raw_bytes) / 1024
+    mime = "image/jpeg"  # always JPEG after conversion
 
     base_url = (settings.ai_base_url or "https://api.openai.com/v1").rstrip("/")
     model = settings.ai_model
-    image_size_kb = len(image_data) * 3 / 4 / 1024
 
     logger.info(
         "AI vision call: model=%s base_url=%s image=%s (%.0f KB, %s)",

@@ -30,18 +30,32 @@ FAKE_JPEG = base64.b64encode(
 
 @pytest.fixture
 def fake_image(tmp_path):
-    """Create a tiny JPEG file and return its path."""
+    """Create a real 100x100 JPEG file and return its path."""
+    from PIL import Image
+    import io
+    img = Image.new("RGB", (100, 100), color=(100, 150, 200))
     p = tmp_path / "test.jpg"
-    p.write_bytes(bytes([0xFF, 0xD8, 0xFF, 0xE0] + [0] * 100))
+    img.save(p, format="JPEG")
     return p
 
 
 @pytest.fixture
 def fake_png(tmp_path):
-    """Create a tiny PNG file."""
+    """Create a real PNG file."""
+    from PIL import Image
+    img = Image.new("RGB", (100, 100), color=(200, 100, 100))
     p = tmp_path / "test.png"
-    # Minimal valid-ish PNG header
-    p.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 20)
+    img.save(p, format="PNG")
+    return p
+
+
+@pytest.fixture
+def large_image(tmp_path):
+    """Create a 3000x2000 JPEG (will be resized before sending)."""
+    from PIL import Image
+    img = Image.new("RGB", (3000, 2000), color=(50, 50, 50))
+    p = tmp_path / "large.jpg"
+    img.save(p, format="JPEG", quality=95)
     return p
 
 
@@ -171,8 +185,8 @@ async def test_call_vision_model_network_error(mock_settings, fake_image):
 
 
 @patch("app.services.ai.settings")
-async def test_call_vision_model_mime_type_detection(mock_settings, fake_png):
-    """Correct MIME type is sent based on file extension."""
+async def test_call_vision_model_png_converts_to_jpeg(mock_settings, fake_png):
+    """PNG images are converted to JPEG before sending."""
     mock_settings.ai_api_key = "test-key"
     mock_settings.ai_base_url = None
     mock_settings.ai_model = "test-model"
@@ -193,15 +207,13 @@ async def test_call_vision_model_mime_type_detection(mock_settings, fake_png):
 
     payload = mock_post.call_args[1]["json"]
     image_url = payload["messages"][1]["content"][1]["image_url"]["url"]
-    assert "image/png" in image_url
+    # All images are converted to JPEG before encoding
+    assert "image/jpeg" in image_url
 
 
 @patch("app.services.ai.settings")
-async def test_call_vision_model_unknown_ext_defaults_jpeg(mock_settings, tmp_path):
-    """Unknown file extension defaults to image/jpeg."""
-    p = tmp_path / "photo.heic"
-    p.write_bytes(b"fake")
-
+async def test_call_vision_model_resizes_large_image(mock_settings, large_image):
+    """Images larger than 1024px are resized before sending."""
     mock_settings.ai_api_key = "test-key"
     mock_settings.ai_base_url = None
     mock_settings.ai_model = "test"
@@ -217,12 +229,18 @@ async def test_call_vision_model_unknown_ext_defaults_jpeg(mock_settings, tmp_pa
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.post = mock_post
 
-    with patch("app.services.ai.httpx.AsyncClient", return_value=mock_client):
-        await call_vision_model(str(p), "test")
+    with (
+        patch("app.services.ai.httpx.AsyncClient", return_value=mock_client),
+        patch("app.services.ai.logger") as mock_logger,
+    ):
+        await call_vision_model(str(large_image), "test")
 
-    payload = mock_post.call_args[1]["json"]
-    image_url = payload["messages"][1]["content"][1]["image_url"]["url"]
-    assert "image/jpeg" in image_url
+    # Verify resize was logged
+    info_msgs = [str(c) for c in mock_logger.info.call_args_list]
+    assert any("Resized" in m for m in info_msgs)
+
+    # Verify the payload was sent (request went through)
+    mock_post.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
