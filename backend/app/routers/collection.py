@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,3 +119,38 @@ async def get_collection_progress(
         result["family_groups"] = family_groups
 
     return result
+
+
+@router.post("/collection/refresh-ebird")
+async def refresh_ebird_data(
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger a refresh of eBird frequency data for the user's region."""
+    import os
+
+    from app.services.ebird_service import _cache, fetch_region_frequencies
+
+    api_key = os.environ.get("EBIRD_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="eBird API key not configured (set EBIRD_API_KEY env var)",
+        )
+
+    # Get user's region
+    db_result = await db.execute(select(User).where(User.email == user))
+    user_obj = db_result.scalar_one_or_none()
+    region = user_obj.region if user_obj and user_obj.region else "us"
+
+    try:
+        frequencies = await fetch_region_frequencies(region, api_key)
+        for code, freq in frequencies.items():
+            _cache.set(region, code, freq)
+        return {
+            "status": "refreshed",
+            "region": region,
+            "species_count": len(frequencies),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"eBird API error: {e}")
