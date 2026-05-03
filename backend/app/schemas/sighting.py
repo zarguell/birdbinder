@@ -1,11 +1,5 @@
-from __future__ import annotations
-
 from pydantic import BaseModel, computed_field
 from datetime import datetime
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.schemas.card import CardRead
 
 
 class SightingCreate(BaseModel):
@@ -18,7 +12,7 @@ class SightingOverride(BaseModel):
     pose_variant: str | None = None
 
 
-class SightingRead(BaseModel):
+class SightingInfo(BaseModel):
     id: str
     user_identifier: str
     photo_path: str | None
@@ -39,11 +33,9 @@ class SightingRead(BaseModel):
     pose_variant: str | None = None
     id_confidence: float | None = None
     id_method: str | None = None
-    cards: list[CardRead] = []
 
     model_config = {"from_attributes": True}
 
-    # ── Frontend-friendly computed fields ──────────────────────────────
     @computed_field
     @property
     def image_url(self) -> str | None:
@@ -75,6 +67,10 @@ class SightingRead(BaseModel):
     @property
     def identification_status(self) -> str:
         return self.status
+
+
+class SightingRead(SightingInfo):
+    cards: list["CardRead"] = []
 
 
 class SightingList(BaseModel):

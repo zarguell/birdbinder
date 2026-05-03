@@ -1,11 +1,7 @@
-from __future__ import annotations
-
 from pydantic import BaseModel
 from datetime import datetime
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from app.schemas.sighting import SightingRead
+from app.schemas.sighting import SightingInfo, SightingRead
 
 
 class CardRead(BaseModel):
@@ -26,7 +22,7 @@ class CardRead(BaseModel):
     duplicate_count: int
     tradeable: bool
     generated_at: datetime | None
-    sighting: SightingRead | None = None
+    sighting: SightingInfo | None = None
 
     model_config = {"from_attributes": True}
 
@@ -36,3 +32,7 @@ class CardList(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# Resolve the forward reference "CardRead" in SightingRead.cards
+SightingRead.model_rebuild(_types_namespace={"CardRead": CardRead})
