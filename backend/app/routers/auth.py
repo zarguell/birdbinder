@@ -56,7 +56,7 @@ async def auth_debug(request: Request):
     ]:
         if token:
             try:
-                payload = jwt.decode(token, key="", options={"verify_signature": False})
+                payload = jwt.decode(token, key="", options={"verify_signature": False, "verify_aud": False})
                 decode_results[label] = {
                     "found": True,
                     "decoded": True,

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 def get_user_from_cf_jwt(token: str) -> str | None:
     """Decode Cloudflare Access JWT — no signature verification needed."""
     try:
-        payload = jwt.decode(token, key="", options={"verify_signature": False})
+        payload = jwt.decode(token, key="", options={"verify_signature": False, "verify_aud": False})
         email = payload.get("email")
         if settings.auth_debug:
             logger.info("CF JWT decoded successfully: email=%s", email)
