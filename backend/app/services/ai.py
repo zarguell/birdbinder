@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_ID_PROMPT = """\
 You are an expert bird identifier. Analyze this bird photograph and identify the species.
 
-Return a JSON object with these fields:
+You MUST respond ONLY with a valid JSON object. No other text, no explanation.
+
+Return a JSON object with exactly these fields:
 - common_name: the common English name (e.g., "American Robin")
 - scientific_name: the scientific name (e.g., "Turdus migratorius")
 - family: the bird family (e.g., "Thrushes")
@@ -84,6 +86,7 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
             },
         ],
         "max_tokens": 500,
+        "response_format": {"type": "json_object"},
     }
 
     t0 = time.monotonic()

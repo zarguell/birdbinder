@@ -117,6 +117,7 @@ async def test_call_vision_model_successful(mock_settings, fake_image):
     assert len(payload["messages"]) == 2  # system + user
     user_content = payload["messages"][1]["content"]
     assert any(item["type"] == "image_url" for item in user_content)
+    assert payload["response_format"] == {"type": "json_object"}
 
     # Verify logging happened (request + response)
     assert mock_logger.info.call_count >= 2
