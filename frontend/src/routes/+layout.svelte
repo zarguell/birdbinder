@@ -51,8 +51,9 @@
 				<a href="/sightings" class="text-gray-400 hover:text-white transition-colors">Sightings</a>
 				<a href="/feed" class="text-gray-400 hover:text-white transition-colors">Feed</a>
 				<a href="/binder" class="text-gray-400 hover:text-white transition-colors">Binder</a>
-				<a href="/sets" class="text-gray-400 hover:text-white transition-colors">Sets</a>
-				<a href="/trades" class="text-gray-400 hover:text-white transition-colors">Trades</a>
+			<a href="/sets" class="text-gray-400 hover:text-white transition-colors">Sets</a>
+			<a href="/collection" class="text-gray-400 hover:text-white transition-colors">Collection</a>
+			<a href="/trades" class="text-gray-400 hover:text-white transition-colors">Trades</a>
 				<button onclick={loadSettings} class="text-gray-400 hover:text-white transition-colors" title="Settings">⚙️</button>
 				{#if userInfo}
 					<a href="/profile" class="flex items-center gap-2 text-gray-300 hover:text-white transition-colors border-l border-gray-700 pl-3">
