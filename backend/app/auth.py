@@ -1,14 +1,23 @@
+import logging
 from jose import jwt, JWTError
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_user_from_cf_jwt(token: str) -> str | None:
     """Decode Cloudflare Access JWT — no signature verification needed."""
     try:
         payload = jwt.decode(token, key="", options={"verify_signature": False})
-        return payload.get("email")
-    except JWTError:
+        email = payload.get("email")
+        if settings.auth_debug:
+            logger.info("CF JWT decoded successfully: email=%s", email)
+            logger.info("JWT claims: %s", {k: v for k, v in payload.items() if k != "email"})
+        return email
+    except JWTError as e:
+        if settings.auth_debug:
+            logger.warning("CF JWT decode failed: %s", e)
         return None
 
 

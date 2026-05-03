@@ -32,6 +32,80 @@ async def get_or_create_user(
     return user
 
 
+@router.get("/auth/debug")
+async def auth_debug(request: Request):
+    """Unauthenticated debug endpoint — shows raw auth state.
+
+    Always accessible regardless of auth config. Use AUTH_DEBUG=true to
+    enable verbose server-side logging; this endpoint always returns
+    diagnostic info.
+    """
+    from jose import jwt, JWTError
+
+    cf_assertion = request.headers.get("Cf-Access-Jwt-Assertion")
+    cf_header = request.headers.get("CF_Authorization")
+    cf_cookie = request.cookies.get("CF_Authorization")
+    bearer = request.headers.get("Authorization", "")
+
+    # Try decoding each CF source
+    decode_results = {}
+    for label, token in [
+        ("cf_jwt_header", cf_assertion),
+        ("cf_header", cf_header),
+        ("cf_cookie", cf_cookie),
+    ]:
+        if token:
+            try:
+                payload = jwt.decode(token, key="", options={"verify_signature": False})
+                decode_results[label] = {
+                    "found": True,
+                    "decoded": True,
+                    "email": payload.get("email"),
+                    "aud": payload.get("aud"),
+                    "iss": payload.get("iss"),
+                    "exp": payload.get("exp"),
+                    "nbf": payload.get("nbf"),
+                    "iat": payload.get("iat"),
+                    "common_name": payload.get("common_name"),
+                    "claim_count": len(payload),
+                    "token_preview": token[:80] + "..." if len(token) > 80 else token,
+                }
+            except JWTError as e:
+                decode_results[label] = {
+                    "found": True,
+                    "decoded": False,
+                    "error": str(e),
+                    "token_preview": token[:80] + "..." if len(token) > 80 else token,
+                }
+        else:
+            decode_results[label] = {"found": False}
+
+    # Bearer check
+    bearer_info = None
+    if bearer.startswith("Bearer "):
+        key = bearer[7:]
+        user = __import__("app.auth", fromlist=["validate_api_key"]).validate_api_key(key)
+        bearer_info = {
+            "found": True,
+            "valid": user is not None,
+            "user": user,
+            "key_preview": key[:8] + "..." if len(key) > 8 else key,
+        }
+
+    return {
+        "sources": decode_results,
+        "bearer": bearer_info,
+        "cookies": list(request.cookies.keys()),
+        "all_headers": dict(request.headers),
+        "config": {
+            "cf_access_enabled": settings.cf_access_enabled,
+            "cf_team_domain": settings.cf_team_domain,
+            "api_keys_count": len(settings.parsed_api_keys),
+            "auth_debug": settings.auth_debug,
+        },
+    }
+
+
 @router.get("/auth/me")
 async def auth_me(
     request: Request,

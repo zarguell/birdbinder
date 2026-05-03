@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     cf_team_domain: str = ""
     ai_base_url: Optional[str] = None
     ai_model: str = "gpt-4o"
-    ai_image_model: Optional[str] = None  # separate model for image generation
+    ai_image_model: Optional[str] = None
+    auth_debug: bool = False
     ai_api_key: Optional[str] = None
     birdbinder_id_prompt: Optional[str] = None
     card_style_name: str = "default"
