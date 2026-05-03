@@ -72,9 +72,8 @@ export const cards = {
 	},
 	get: (id: string) => request<any>(`/cards/${id}`),
 	generate: (sightingId: string) =>
-		request<any>('/cards/generate', {
+		request<any>(`/cards/generate/${sightingId}`, {
 			method: 'POST',
-			body: JSON.stringify({ sighting_id: sightingId })
 		}),
 	delete: (id: string) =>
 		request<void>(`/cards/${id}`, { method: 'DELETE' })
