@@ -3,6 +3,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from app.main import app
+
 TEST_API_KEY = "***"
 TEST_USER = f"api-key:{TEST_API_KEY[:8]}"
 
@@ -155,10 +157,24 @@ async def test_override_empty_body_has_no_effect(auth_client, sighting):
     assert data["status"] == "pending"
 
 
-async def test_override_unauthenticated(client):
-    """PATCH without auth should return 401."""
-    response = await client.patch(
-        f"/api/sightings/{uuid.uuid4()}",
-        json={"species_code": "amerob"},
-    )
-    assert response.status_code == 401
+async def test_override_no_auth_config_returns_local_user(client, db_engine):
+    """When no auth is configured, PATCH proceeds as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # Should return 404 (sighting not found, not 401)
+        response = await client.patch(
+            f"/api/sightings/{uuid.uuid4()}",
+            json={"species_code": "amerob"},
+        )
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)

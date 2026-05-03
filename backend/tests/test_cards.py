@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.main import app
 from app.models.card import Card
 from app.models.sighting import Sighting
 
@@ -233,22 +234,36 @@ async def test_delete_card_not_found_returns_404(auth_client):
 # ---------------------------------------------------------------------------
 
 
-async def test_unauthenticated_returns_401(client):
-    """All card endpoints should require authentication."""
-    # Generate
-    response = await client.post(
-        f"/api/cards/generate/{str(uuid.uuid4())}"
-    )
-    assert response.status_code == 401
+async def test_no_auth_config_returns_local_user(client, db_engine):
+    """When no auth is configured, requests without auth proceed as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    # List
-    response = await client.get("/api/cards")
-    assert response.status_code == 401
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 
-    # Get
-    response = await client.get(f"/api/cards/{str(uuid.uuid4())}")
-    assert response.status_code == 401
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
 
-    # Delete
-    response = await client.delete(f"/api/cards/{str(uuid.uuid4())}")
-    assert response.status_code == 401
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # Generate — should return 404 (sighting not found, not 401)
+        response = await client.post(
+            f"/api/cards/generate/{str(uuid.uuid4())}"
+        )
+        assert response.status_code == 404
+
+        # List — should return empty list
+        response = await client.get("/api/cards")
+        assert response.status_code == 200
+        assert response.json()["items"] == []
+
+        # Get — should return 404 (card not found, not 401)
+        response = await client.get(f"/api/cards/{str(uuid.uuid4())}")
+        assert response.status_code == 404
+
+        # Delete — should return 404 (card not found, not 401)
+        response = await client.delete(f"/api/cards/{str(uuid.uuid4())}")
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)

@@ -1,6 +1,8 @@
 import uuid
 from unittest.mock import patch
 
+from app.main import app
+
 TEST_API_KEY = "test-key-123"
 TEST_USER = f"api-key:{TEST_API_KEY[:8]}"
 TEST_USER_2 = "api-key:otherus"
@@ -252,9 +254,27 @@ async def test_get_set_progress_complete(auth_client, db_session):
     assert data["progress_percent"] == 100.0
 
 
-async def test_unauthenticated_returns_401(client):
-    resp = await client.get("/api/sets")
-    assert resp.status_code == 401
+async def test_no_auth_config_returns_local_user(client, db_engine):
+    """When no auth is configured, requests proceed as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    resp = await client.post("/api/sets", json={"name": "Nope"})
-    assert resp.status_code == 401
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # GET /api/sets — should return empty list
+        resp = await client.get("/api/sets")
+        assert resp.status_code == 200
+        assert resp.json()["items"] == []
+
+        # POST /api/sets — should succeed as local-user
+        resp = await client.post("/api/sets", json={"name": "Nope"})
+        assert resp.status_code == 201
+        assert resp.json()["creator_identifier"] == "local-user"
+    finally:
+        app.dependency_overrides.pop(get_db, None)

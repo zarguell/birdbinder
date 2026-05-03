@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from app.main import app
 from app.models.enums import PoseVariant
 from app.models.job import Job
 from app.models.sighting import Sighting
@@ -202,13 +203,41 @@ async def test_job_status_failed(auth_client, db_session):
     assert data["error"] == "AI service unavailable"
 
 
-async def test_identify_unauthenticated_returns_401(client):
-    """POST /identify without auth should return 401."""
-    response = await client.post(f"/api/sightings/{str(uuid.uuid4())}/identify")
-    assert response.status_code == 401
+async def test_identify_no_auth_config_returns_local_user(client, db_engine):
+    """When no auth is configured, POST /identify proceeds as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # Should return 404 (sighting not found, not 401)
+        response = await client.post(f"/api/sightings/{str(uuid.uuid4())}/identify")
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
-async def test_job_status_unauthenticated_returns_401(client):
-    """GET /jobs/{id} without auth should return 401."""
-    response = await client.get(f"/api/jobs/{str(uuid.uuid4())}")
-    assert response.status_code == 401
+async def test_job_status_no_auth_config_returns_local_user(client, db_engine):
+    """When no auth is configured, GET /jobs/{id} proceeds as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # Should return 404 (job not found, not 401)
+        response = await client.get(f"/api/jobs/{str(uuid.uuid4())}")
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)

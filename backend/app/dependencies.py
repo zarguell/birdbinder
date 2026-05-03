@@ -1,15 +1,19 @@
 from fastapi import Depends, HTTPException, Request, status
 
 from app.auth import get_user_from_cf_jwt, validate_api_key
+from app.config import settings
 
 
 async def get_current_user(request: Request) -> str:
     """Authenticate request via CF_Authorization JWT or Bearer API key.
 
+    If no auth mechanism is configured (no API_KEYS and CF disabled),
+    returns a default local user — no auth required.
+
     Checks the CF_Authorization header first (Cloudflare Access JWT).
-    Falls back to Authorization: Bearer <key> validated against settings.
+    Falls back to Authorization: Bearer *** validated against settings.
     Returns the user identifier string.
-    Raises 401 if neither method succeeds.
+    Raises 401 if auth is configured but credentials are missing/invalid.
     """
     # Check CF_Authorization header first
     cf_token = request.headers.get("CF_Authorization")
@@ -25,6 +29,10 @@ async def get_current_user(request: Request) -> str:
         user = validate_api_key(key)
         if user:
             return user
+
+    # No auth configured — allow unauthenticated local access
+    if not settings.parsed_api_keys and not settings.cf_access_enabled:
+        return "local-user"
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

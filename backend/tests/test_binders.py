@@ -1,6 +1,7 @@
 import uuid
 from httpx import AsyncClient
 
+from app.main import app
 from app.models.card import Card
 
 from tests.conftest import TEST_API_KEY, TEST_USER
@@ -237,15 +238,34 @@ async def test_remove_nonexistent_card_returns_404(auth_client: AsyncClient):
     assert resp.status_code == 404
 
 
-async def test_unauthenticated_returns_401(client: AsyncClient):
-    resp = await client.post("/api/binders", json={"name": "No Auth"})
-    assert resp.status_code == 401
+async def test_no_auth_config_returns_local_user(client: AsyncClient, db_engine):
+    """When no auth is configured, requests proceed as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    resp = await client.get("/api/binders")
-    assert resp.status_code == 401
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 
-    resp = await client.get(f"/api/binders/{uuid.uuid4()}")
-    assert resp.status_code == 401
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # POST /api/binders — should succeed as local-user
+        resp = await client.post("/api/binders", json={"name": "No Auth"})
+        assert resp.status_code == 201
+        assert resp.json()["user_identifier"] == "local-user"
+
+        # GET /api/binders — should return list with the created binder
+        resp = await client.get("/api/binders")
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+
+        # GET /api/binders/{uuid} — should return 404 (not found)
+        resp = await client.get(f"/api/binders/{uuid.uuid4()}")
+        assert resp.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 async def test_cannot_access_other_user_binder(auth_client: AsyncClient):

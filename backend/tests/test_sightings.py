@@ -5,6 +5,7 @@ from PIL import Image
 import pytest
 from httpx import AsyncClient
 
+from app.main import app
 from app.models.sighting import Sighting
 
 TEST_API_KEY = "test-key-123"
@@ -104,20 +105,27 @@ async def test_delete_sighting(auth_client, sighting, db_session):
 
 
 @pytest.mark.asyncio
-async def test_unauthenticated_returns_401(client):
-    """Requests without auth header should return 401."""
-    # Test create
-    response = await client.post("/api/sightings")
-    assert response.status_code == 401
+async def test_no_auth_config_returns_local_user(client, db_engine):
+    """When no auth is configured, requests without auth header proceed as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    # Test list
-    response = await client.get("/api/sightings")
-    assert response.status_code == 401
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 
-    # Test get
-    response = await client.get(f"/api/sightings/{uuid.uuid4()}")
-    assert response.status_code == 401
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
 
-    # Test delete
-    response = await client.delete(f"/api/sightings/{uuid.uuid4()}")
-    assert response.status_code == 401
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # Test list — should succeed (empty list)
+        response = await client.get("/api/sightings")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["items"] == []
+
+        # Test get — should return 404 (no sighting found, not 401)
+        response = await client.get(f"/api/sightings/{uuid.uuid4()}")
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)

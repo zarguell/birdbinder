@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+from app.main import app
 from app.models.card import Card
 from app.models.trade import Trade
 from tests.conftest import TEST_API_KEY, TEST_USER
@@ -382,35 +383,50 @@ async def test_cancel_trade(auth_client, db_session):
 # ---------------------------------------------------------------------------
 
 
-async def test_unauthenticated_returns_401(client):
-    """All trade endpoints should require authentication."""
-    # Create
-    response = await client.post(
-        "/api/trades",
-        json={
-            "offered_to": "other-user",
-            "offered_card_ids": [],
-            "requested_card_ids": [],
-        },
-    )
-    assert response.status_code == 401
+async def test_no_auth_config_returns_local_user(client, db_engine):
+    """When no auth is configured, trade endpoints proceed as 'local-user'."""
+    from app.db import get_db
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    # List
-    response = await client.get("/api/trades")
-    assert response.status_code == 401
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 
-    # Get
-    response = await client.get(f"/api/trades/{str(uuid.uuid4())}")
-    assert response.status_code == 401
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
 
-    # Accept
-    response = await client.post(f"/api/trades/{str(uuid.uuid4())}/accept")
-    assert response.status_code == 401
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        # Create — will get a 422 validation error (self-trade or empty cards),
+        # but NOT 401
+        response = await client.post(
+            "/api/trades",
+            json={
+                "offered_to": "other-user",
+                "offered_card_ids": [],
+                "requested_card_ids": [],
+            },
+        )
+        assert response.status_code != 401
 
-    # Decline
-    response = await client.post(f"/api/trades/{str(uuid.uuid4())}/decline")
-    assert response.status_code == 401
+        # List — should return empty list
+        response = await client.get("/api/trades")
+        assert response.status_code == 200
+        assert response.json()["total"] == 0
 
-    # Cancel
-    response = await client.post(f"/api/trades/{str(uuid.uuid4())}/cancel")
-    assert response.status_code == 401
+        # Get — should return 404 (not found, not 401)
+        response = await client.get(f"/api/trades/{str(uuid.uuid4())}")
+        assert response.status_code == 404
+
+        # Accept — should return 404 (trade not found)
+        response = await client.post(f"/api/trades/{str(uuid.uuid4())}/accept")
+        assert response.status_code == 404
+
+        # Decline — should return 404 (trade not found)
+        response = await client.post(f"/api/trades/{str(uuid.uuid4())}/decline")
+        assert response.status_code == 404
+
+        # Cancel — should return 404 (trade not found)
+        response = await client.post(f"/api/trades/{str(uuid.uuid4())}/cancel")
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)

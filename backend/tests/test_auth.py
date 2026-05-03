@@ -10,13 +10,15 @@ TEST_API_KEYS = {"test-secret-key-12345678", "another-key"}
 
 @pytest.fixture(autouse=True)
 def patch_api_keys():
-    """Patch validate_api_key to use known test keys."""
+    """Patch validate_api_key and settings to use known test keys."""
     def fake_validate(key: str) -> str | None:
         if key in TEST_API_KEYS:
             return f"api-key:{key[:8]}"
         return None
 
-    with patch("app.dependencies.validate_api_key", side_effect=fake_validate):
+    with patch("app.dependencies.validate_api_key", side_effect=fake_validate), \
+         patch("app.dependencies.settings", parsed_api_keys=["test-key-123"], cf_access_enabled=False), \
+         patch("app.config.settings", parsed_api_keys=["test-key-123"], cf_access_enabled=False):
         yield
 
 
