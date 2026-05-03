@@ -66,7 +66,8 @@ All config via environment variables (or `.env` file):
 | `APP_URL` | `http://localhost:8000` | Base URL for the app |
 | `AI_API_KEY` | — | OpenAI API key (enables AI identification + card art) |
 | `AI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
-| `AI_MODEL` | `gpt-4o` | Model for bird identification |
+| `AI_MODEL` | `gpt-4o` | Model for bird identification (vision/chat) |
+| `AI_IMAGE_MODEL` | _(same as AI_MODEL)_ | Model for card art generation (image-to-image or text-to-image) |
 | `CF_ACCESS_ENABLED` | `false` | Enable Cloudflare Access JWT auth |
 | `CF_TEAM_DOMAIN` | — | Cloudflare team domain for JWT verification |
 | `BIRDBINDER_ID_PROMPT` | _(built-in)_ | Custom system prompt for bird identification |
