@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models.sighting import Sighting
+from app.models.job import Job
 from app.schemas.sighting import SightingRead, SightingList
 from app import storage, image
 
@@ -148,3 +149,27 @@ async def delete_sighting(
 
     await db.delete(sighting)
     await db.commit()
+
+
+@router.post("/sightings/{sighting_id}/identify")
+async def identify_sighting(
+    sighting_id: str,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.identifier import start_identification
+
+    # Verify ownership
+    result = await db.execute(
+        select(Sighting).where(
+            Sighting.id == sighting_id, Sighting.user_identifier == user
+        )
+    )
+    sighting = result.scalar_one_or_none()
+    if not sighting:
+        raise HTTPException(status_code=404, detail="Sighting not found")
+    try:
+        job_id = await start_identification(sighting_id, db)
+        return {"job_id": job_id, "status": "pending"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
