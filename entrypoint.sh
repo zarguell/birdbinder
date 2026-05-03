@@ -7,7 +7,7 @@ mkdir -p /app/data /app/storage
 
 # Run Alembic migrations
 echo "Running database migrations..."
-alembic upgrade head
+PYTHONPATH=/app alembic upgrade head
 echo "Migrations complete."
 
 # Start uvicorn and huey consumer in the background
