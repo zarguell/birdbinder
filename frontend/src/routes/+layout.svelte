@@ -1,10 +1,10 @@
 <script lang="ts">
 	import '../app.css';
-	import { auth } from '$lib/api';
+	import { auth, profile } from '$lib/api';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
-	let userInfo: { user_identifier: string; auth_source: string } | null = $state(null);
+	let userInfo: { user_identifier: string; display_name: string | null; avatar_path: string | null; auth_source: string } | null = $state(null);
 	let showSettings = $state(false);
 	let appSettings: Record<string, unknown> | null = $state(null);
 	let settingsError = $state('');
@@ -29,11 +29,16 @@
 		}
 	}
 
-	function displayName(id: string) {
-		if (id === 'local-user') return '👤 Local User';
-		if (id.startsWith('api-key:')) return '🔑 API User';
-		// Email address — show the part before @
+	function displayName(id: string, customName: string | null) {
+		if (customName) return customName;
+		if (id === 'local-user') return 'Local User';
+		if (id.startsWith('api-key:')) return 'API User';
 		return id.split('@')[0];
+	}
+
+	function avatarUrl(path: string | null) {
+		if (!path) return null;
+		return `/storage/${path}`;
 	}
 </script>
 
@@ -49,11 +54,16 @@
 				<a href="/trades" class="text-gray-400 hover:text-white transition-colors">Trades</a>
 				<button onclick={loadSettings} class="text-gray-400 hover:text-white transition-colors" title="Settings">⚙️</button>
 				{#if userInfo}
-					<span class="text-xs text-gray-500 border-l border-gray-700 pl-3">
-						{displayName(userInfo.user_identifier)}
-					</span>
+					<a href="/profile" class="flex items-center gap-2 text-gray-300 hover:text-white transition-colors border-l border-gray-700 pl-3">
+						{#if avatarUrl(userInfo.avatar_path)}
+							<img src={avatarUrl(userInfo.avatar_path)} alt="" class="w-6 h-6 rounded-full object-cover" />
+						{:else}
+							<span class="text-base">👤</span>
+						{/if}
+						<span class="text-xs">{displayName(userInfo.user_identifier, userInfo.display_name)}</span>
+					</a>
 				{:else}
-					<span class="text-xs text-red-400">⚠ no auth</span>
+					<span class="text-xs text-red-400 border-l border-gray-700 pl-3">⚠ no auth</span>
 				{/if}
 			</div>
 		</div>
@@ -82,6 +92,10 @@
 							<div class="flex justify-between gap-4 text-sm">
 								<span class="text-gray-500 font-mono text-xs">user_identifier</span>
 								<span class="text-green-400 font-mono text-right">{userInfo.user_identifier}</span>
+							</div>
+							<div class="flex justify-between gap-4 text-sm mt-1">
+								<span class="text-gray-500 font-mono text-xs">display_name</span>
+								<span class="text-gray-200 text-right">{userInfo.display_name || '(not set)'}</span>
 							</div>
 							<div class="flex justify-between gap-4 text-sm mt-1">
 								<span class="text-gray-500 font-mono text-xs">auth_source</span>

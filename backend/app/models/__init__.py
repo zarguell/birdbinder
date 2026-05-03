@@ -6,6 +6,7 @@ from app.models.species import SpeciesCache
 from app.models.job import Job, JobType, JobStatus
 from app.models.enums import SightingStatus
 from app.models.binder import Binder, BinderCard
+from app.models.user import User
 
 __all__ = [
     "Sighting",
@@ -21,4 +22,5 @@ __all__ = [
     "TradeStatus",
     "Binder",
     "BinderCard",
+    "User",
 ]

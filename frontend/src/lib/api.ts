@@ -145,6 +145,20 @@ export const jobs = {
 
 // Auth / debug
 export const auth = {
-	me: () => request<{ user_identifier: string; auth_source: string; has_cf_jwt_header: boolean; has_cf_cookie_header: boolean; has_bearer_header: boolean }>('/auth/me'),
+	me: () => request<{ user_identifier: string; display_name: string | null; avatar_path: string | null; auth_source: string; has_cf_jwt_header: boolean; has_cf_cookie: boolean; has_cf_raw_header: boolean; has_bearer_header: boolean }>('/auth/me'),
 	settings: () => request<Record<string, unknown>>('/auth/settings')
+};
+
+// Profile
+export const profile = {
+	get: () => request<{ email: string; display_name: string | null; avatar_path: string | null; created_at: string | null }>('/profile'),
+	update: (data: { display_name?: string }) => request<any>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+	uploadAvatar: (file: File) => {
+		const form = new FormData();
+		form.append('file', file);
+		return fetch(`${API_BASE}/profile/avatar`, { method: 'POST', body: form }).then(async (res) => {
+			if (!res.ok) throw new ApiError(res.status, await res.text());
+			return res.json();
+		});
+	}
 };

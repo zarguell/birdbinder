@@ -9,6 +9,7 @@ from pathlib import Path
 from app.config import settings
 from app.dependencies import get_current_user
 from app.routers import cards, sightings, species, jobs, binders, sets, trades, auth
+from app import storage
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,12 @@ if not settings.parsed_api_keys and not settings.cf_access_enabled:
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+# Serve user-uploaded files (avatars, sightings photos, card art)
+storage_dir = storage.get_storage_path()
+if storage_dir.exists():
+    app.mount("/storage", StaticFiles(directory=storage_dir), name="storage")
 
 
 # Serve frontend static assets (SvelteKit adapter-static output)
