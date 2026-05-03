@@ -8,6 +8,7 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.config import settings
 from app import storage
+from app.services.region_service import get_region_codes
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,7 @@ async def get_profile(
         "email": profile_user.email,
         "display_name": profile_user.display_name,
         "avatar_path": profile_user.avatar_path,
+        "region": profile_user.region,
         "created_at": profile_user.created_at.isoformat() if profile_user.created_at else None,
     }
 
@@ -223,11 +225,23 @@ async def update_profile(
             display_name = str(display_name).strip() or None
         profile_user.display_name = display_name
 
+    if "region" in body:
+        region = body["region"]
+        if region is not None:
+            try:
+                get_region_codes(region)
+            except ValueError:
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=422, detail=f"Invalid region: {region}")
+        profile_user.region = region
+
     await db.commit()
     return {
         "email": profile_user.email,
         "display_name": profile_user.display_name,
         "avatar_path": profile_user.avatar_path,
+        "region": profile_user.region,
     }
 
 

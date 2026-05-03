@@ -9,6 +9,7 @@ from pathlib import Path
 from app.config import settings
 from app.dependencies import get_current_user
 from app.routers import cards, sightings, species, jobs, binders, sets, trades, auth, settings as settings_router, activity as activity_router
+from app.routers.collection import router as collection_router
 from app import storage
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ app.include_router(sets.router, prefix="/api", tags=["sets"])
 app.include_router(trades.router, prefix="/api", tags=["trades"])
 app.include_router(settings_router.router, prefix="/api", tags=["settings"])
 app.include_router(activity_router.router, prefix="/api", tags=["activity"])
+app.include_router(collection_router, prefix="/api", tags=["collection"])
 
 # Warn if running without authentication
 if not settings.parsed_api_keys and not settings.cf_access_enabled:
