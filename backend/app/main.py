@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
@@ -7,7 +8,22 @@ from app.config import settings
 from app.dependencies import get_current_user
 from app.routers import cards, sightings, species, jobs, binders, sets, trades
 
-app = FastAPI(title="BirdBinder", version="0.1.0")
+app = FastAPI(
+    title="BirdBinder",
+    version="0.1.0",
+    description="Birding card-collection app — upload sightings, collect cards, complete sets, trade with friends.",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(sightings.router, prefix="/api", tags=["sightings"])
 app.include_router(species.router, prefix="/api", tags=["species"])
