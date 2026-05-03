@@ -103,7 +103,9 @@ def _run_card_generation(job_id: str, sighting_id: str):
 
 
 # Register as huey task
-generate_card_task = huey.task(_run_card_generation)
+@huey.task()
+def generate_card_task(job_id: str, sighting_id: str):
+    _run_card_generation(job_id, sighting_id)
 
 
 async def start_card_generation(sighting_id: str, db) -> str:

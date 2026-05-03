@@ -88,7 +88,9 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
 
 
 # Register as huey task
-identify_task = huey.task(_run_identification)
+@huey.task()
+def identify_task(job_id: str, sighting_id: str, image_path: str):
+    _run_identification(job_id, sighting_id, image_path)
 
 
 async def start_identification(sighting_id: str, db) -> str:
