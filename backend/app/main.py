@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.dependencies import get_current_user
-from app.routers import cards, sightings, species, jobs, binders, sets, trades
+from app.routers import cards, sightings, species, jobs, binders, sets, trades, auth
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(sightings.router, prefix="/api", tags=["sightings"])
 app.include_router(species.router, prefix="/api", tags=["species"])
 app.include_router(jobs.router, prefix="/api", tags=["jobs"])
@@ -49,11 +50,6 @@ if not settings.parsed_api_keys and not settings.cf_access_enabled:
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
-
-
-@app.get("/api/me")
-async def me(user: str = Depends(get_current_user)):
-    return {"user": user}
 
 
 # Serve frontend static assets (SvelteKit adapter-static output)

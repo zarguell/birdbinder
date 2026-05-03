@@ -15,8 +15,14 @@ async def get_current_user(request: Request) -> str:
     Returns the user identifier string.
     Raises 401 if auth is configured but credentials are missing/invalid.
     """
-    # Check CF_Authorization header first
-    cf_token = request.headers.get("CF_Authorization")
+    # Check Cloudflare Access JWT — try header then cookie
+    # Cf-Access-Jwt-Assertion: HTTP header injected by CF Tunnel to origin
+    # CF_Authorization: cookie set on browser by CF Access (forwarded to origin as cookie)
+    cf_token = (
+        request.headers.get("Cf-Access-Jwt-Assertion")
+        or request.headers.get("CF_Authorization")
+        or request.cookies.get("CF_Authorization")
+    )
     if cf_token:
         user = get_user_from_cf_jwt(cf_token)
         if user:

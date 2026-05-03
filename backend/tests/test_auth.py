@@ -22,12 +22,6 @@ def patch_api_keys():
         yield
 
 
-async def _client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-
-
 # --- 1. Health endpoint works without auth ---
 
 
@@ -45,7 +39,7 @@ async def test_health_no_auth():
 @pytest.mark.asyncio
 async def test_protected_endpoint_no_auth():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        resp = await ac.get("/api/me")
+        resp = await ac.get("/api/auth/me")
     assert resp.status_code == 401
     assert resp.json()["detail"] == "Authentication required"
 
@@ -56,9 +50,11 @@ async def test_protected_endpoint_no_auth():
 @pytest.mark.asyncio
 async def test_valid_api_key():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        resp = await ac.get("/api/me", headers={"Authorization": "Bearer test-secret-key-12345678"})
+        resp = await ac.get("/api/auth/me", headers={"Authorization": "Bearer test-secret-key-12345678"})
     assert resp.status_code == 200
-    assert resp.json()["user"] == "api-key:test-sec"
+    data = resp.json()
+    assert data["user_identifier"] == "api-key:test-sec"
+    assert data["auth_source"] == "api-key"
 
 
 # --- 4. Invalid API key returns 401 ---
@@ -67,7 +63,7 @@ async def test_valid_api_key():
 @pytest.mark.asyncio
 async def test_invalid_api_key():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        resp = await ac.get("/api/me", headers={"Authorization": "Bearer wrong-key"})
+        resp = await ac.get("/api/auth/me", headers={"Authorization": "Bearer wrong-key"})
     assert resp.status_code == 401
 
 
@@ -77,64 +73,94 @@ async def test_invalid_api_key():
 @pytest.mark.asyncio
 async def test_malformed_auth_header():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        resp = await ac.get("/api/me", headers={"Authorization": "NotBearer foo"})
+        resp = await ac.get("/api/auth/me", headers={"Authorization": "NotBearer foo"})
     assert resp.status_code == 401
 
 
-# --- 6. CF_Authorization with valid JWT (email present) returns 200 ---
+# --- 6. Cf-Access-Jwt-Assertion with valid JWT returns 200 ---
 
 
 @pytest.mark.asyncio
-async def test_cf_authorization_valid_jwt():
+async def test_cf_jwt_assertion_valid():
     with patch("app.dependencies.get_user_from_cf_jwt", return_value="user@example.com"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            resp = await ac.get("/api/me", headers={"CF_Authorization": "some.jwt.token"})
+            resp = await ac.get("/api/auth/me", headers={"Cf-Access-Jwt-Assertion": "some.jwt.token"})
     assert resp.status_code == 200
-    assert resp.json()["user"] == "user@example.com"
+    data = resp.json()
+    assert data["user_identifier"] == "user@example.com"
+    assert data["auth_source"] == "cf-jwt-header"
+    assert data["has_cf_jwt_header"] is True
 
 
-# --- 7. CF_Authorization with JWT missing email returns 401 ---
+# --- 7. Cf-Access-Jwt-Assertion with JWT missing email returns 401 ---
 
 
 @pytest.mark.asyncio
-async def test_cf_authorization_jwt_no_email():
+async def test_cf_jwt_assertion_no_email():
     with patch("app.dependencies.get_user_from_cf_jwt", return_value=None):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            resp = await ac.get("/api/me", headers={"CF_Authorization": "some.jwt.token"})
+            resp = await ac.get("/api/auth/me", headers={"Cf-Access-Jwt-Assertion": "some.jwt.token"})
     assert resp.status_code == 401
 
 
-# --- 8. CF_Authorization with invalid JWT returns 401 ---
+# --- 8. CF_Authorization (cookie fallback) still works ---
 
 
 @pytest.mark.asyncio
-async def test_cf_authorization_invalid_jwt():
-    with patch("app.dependencies.get_user_from_cf_jwt", return_value=None):
+async def test_cf_authorization_cookie_fallback():
+    """CF_Authorization sent as a header still works (matches header path)."""
+    with patch("app.dependencies.get_user_from_cf_jwt", return_value="user@example.com"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            resp = await ac.get("/api/me", headers={"CF_Authorization": "garbage"})
-    assert resp.status_code == 401
+            resp = await ac.get("/api/auth/me", headers={"CF_Authorization": "some.jwt.token"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["user_identifier"] == "user@example.com"
+    assert data["auth_source"] == "cf-header"
+    assert data["has_cf_raw_header"] is True
 
 
-# --- 9. CF_Authorization takes priority over Bearer key ---
+# --- 9. Cf-Access-Jwt-Assertion takes priority over CF_Authorization ---
 
 
 @pytest.mark.asyncio
-async def test_cf_authorization_priority_over_bearer():
+async def test_cf_jwt_assertion_priority_over_cookie():
+    with patch("app.dependencies.get_user_from_cf_jwt", return_value="jwt-user@example.com"):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            resp = await ac.get(
+                "/api/auth/me",
+                headers={
+                    "Cf-Access-Jwt-Assertion": "jwt.token",
+                    "CF_Authorization": "cookie.token",
+                },
+            )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["user_identifier"] == "jwt-user@example.com"
+    assert data["auth_source"] == "cf-jwt-header"
+
+
+# --- 10. CF JWT takes priority over Bearer key ---
+
+
+@pytest.mark.asyncio
+async def test_cf_jwt_priority_over_bearer():
     with patch("app.dependencies.get_user_from_cf_jwt", return_value="cf-user@example.com"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             resp = await ac.get(
-                "/api/me",
+                "/api/auth/me",
                 headers={
-                    "CF_Authorization": "some.jwt.token",
+                    "Cf-Access-Jwt-Assertion": "some.jwt.token",
                     "Authorization": "Bearer test-secret-key-12345678",
                 },
             )
     assert resp.status_code == 200
+    data = resp.json()
     # CF wins — returns email, not api-key:...
-    assert resp.json()["user"] == "cf-user@example.com"
+    assert data["user_identifier"] == "cf-user@example.com"
+    assert data["auth_source"] == "cf-jwt-header"
 
 
-# --- 10. CF_Authorization fails → falls back to valid Bearer key ---
+# --- 11. CF JWT fails → falls back to valid Bearer key ---
 
 
 @pytest.mark.asyncio
@@ -142,17 +168,35 @@ async def test_fallback_to_bearer_when_cf_fails():
     with patch("app.dependencies.get_user_from_cf_jwt", return_value=None):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             resp = await ac.get(
-                "/api/me",
+                "/api/auth/me",
                 headers={
-                    "CF_Authorization": "bad.token",
+                    "Cf-Access-Jwt-Assertion": "bad.token",
                     "Authorization": "Bearer test-secret-key-12345678",
                 },
             )
     assert resp.status_code == 200
-    assert resp.json()["user"] == "api-key:test-sec"
+    data = resp.json()
+    assert data["user_identifier"] == "api-key:test-sec"
+    assert data["auth_source"] == "api-key"
 
 
-# --- 11. Unit tests for auth.py functions directly ---
+# --- 12. /auth/settings returns non-sensitive config ---
+
+
+@pytest.mark.asyncio
+async def test_auth_settings_no_secrets():
+    with patch("app.routers.auth.settings", cf_access_enabled=False, parsed_api_keys=["test-key-123"], ai_base_url="https://custom.api/v1", ai_model="test-model", ai_api_key="secret-key", ai_image_model=None, card_style_name="watercolor", storage_path="./storage", database_url="sqlite+aiosqlite:///./data/db.sqlite", cf_team_domain=""):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            resp = await ac.get("/api/auth/settings", headers={"Authorization": "Bearer test-secret-key-12345678"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["auth_mode"] == "api_key"
+    assert data["ai_base_url"] == "https://custom.api/v1"
+    assert data["ai_model"] == "test-model"
+    assert data["ai_enabled"] is True
+
+
+# --- 13. Unit tests for auth.py functions directly ---
 
 
 def test_get_user_from_cf_jwt_valid():

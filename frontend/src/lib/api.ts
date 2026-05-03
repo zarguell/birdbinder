@@ -142,3 +142,9 @@ export const trades = {
 export const jobs = {
 	get: (id: string) => request<any>(`/jobs/${id}`)
 };
+
+// Auth / debug
+export const auth = {
+	me: () => request<{ user_identifier: string; auth_source: string; has_cf_jwt_header: boolean; has_cf_cookie_header: boolean; has_bearer_header: boolean }>('/auth/me'),
+	settings: () => request<Record<string, unknown>>('/auth/settings')
+};
