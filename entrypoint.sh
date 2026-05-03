@@ -6,7 +6,7 @@ set -e
 mkdir -p /app/data /app/storage
 if [ "$(id -u)" = "0" ]; then
     chown -R appuser:appuser /app/data /app/storage
-    exec su-exec appuser "$0" "$@"
+    exec gosu appuser "$0" "$@"
 fi
 
 # Run Alembic migrations

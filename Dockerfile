@@ -17,7 +17,7 @@ FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 RUN adduser --system --group appuser && \
-    apt-get update && apt-get install -y --no-install-recommends su-exec && \
+    apt-get update && apt-get install -y --no-install-recommends gosu && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
