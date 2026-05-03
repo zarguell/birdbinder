@@ -37,7 +37,7 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             # Call AI
             prompt = settings.birdbinder_id_prompt or DEFAULT_ID_PROMPT
             result_text = asyncio.run(call_vision_model(image_path, prompt))
-            logger.info("Job %s: AI response received (%d chars)", job_id, len(result_text))
+            logger.info("Job %s: AI response received (%d chars): %s", job_id, len(result_text), result_text[:500])
 
             # Parse JSON response
             result_text = result_text.strip()
@@ -45,7 +45,14 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
                 result_text = (
                     result_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
                 )
-            result = json.loads(result_text)
+            try:
+                result = json.loads(result_text)
+            except json.JSONDecodeError as e:
+                logger.error(
+                    "Job %s: failed to parse AI JSON response: %s | raw text: %s",
+                    job_id, e, result_text[:1000],
+                )
+                raise
 
             # Validate pose_variant
             valid_poses = [p.value for p in PoseVariant]
