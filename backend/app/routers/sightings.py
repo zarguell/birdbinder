@@ -240,6 +240,19 @@ async def update_sighting(
             )
         sighting.pose_variant = override.pose_variant
 
+    if override.latitude is not None:
+        if not -90 <= override.latitude <= 90:
+            raise HTTPException(status_code=422, detail="Latitude must be between -90 and 90")
+        sighting.exif_lat = override.latitude
+
+    if override.longitude is not None:
+        if not -180 <= override.longitude <= 180:
+            raise HTTPException(status_code=422, detail="Longitude must be between -180 and 180")
+        sighting.exif_lon = override.longitude
+
+    if override.location_display_name is not None:
+        sighting.location_display_name = override.location_display_name
+
     await db.commit()
     await db.refresh(sighting)
     return sighting

@@ -129,3 +129,97 @@ async def test_no_auth_config_returns_local_user(client, db_engine):
         assert response.status_code == 404
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
+async def test_update_sighting_location(auth_client, db_session):
+    """PATCH location fields (latitude, longitude, location_display_name)."""
+    from app.models.sighting import Sighting
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        photo_path="sightings/test.jpg",
+    )
+    db_session.add(sighting)
+    await db_session.commit()
+    sid = sighting.id
+
+    resp = await auth_client.patch(
+        f"/api/sightings/{sid}",
+        json={
+            "latitude": 40.7128,
+            "longitude": -74.0060,
+            "location_display_name": "New York, NY",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["exif_lat"] == 40.7128
+    assert data["exif_lon"] == -74.0060
+    assert data["location_display_name"] == "New York, NY"
+
+
+@pytest.mark.asyncio
+async def test_update_location_invalid_lat(auth_client, db_session):
+    """Latitude out of range returns 422."""
+    from app.models.sighting import Sighting
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        photo_path="sightings/test.jpg",
+    )
+    db_session.add(sighting)
+    await db_session.commit()
+
+    resp = await auth_client.patch(
+        f"/api/sightings/{sighting.id}",
+        json={"latitude": 999},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_location_invalid_lon(auth_client, db_session):
+    """Longitude out of range returns 422."""
+    from app.models.sighting import Sighting
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        photo_path="sightings/test.jpg",
+    )
+    db_session.add(sighting)
+    await db_session.commit()
+
+    resp = await auth_client.patch(
+        f"/api/sightings/{sighting.id}",
+        json={"longitude": 999},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_location_partial(auth_client, db_session):
+    """Patching only latitude leaves longitude unchanged."""
+    from app.models.sighting import Sighting
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        photo_path="sightings/test.jpg",
+        exif_lat=0.0,
+        exif_lon=0.0,
+    )
+    db_session.add(sighting)
+    await db_session.commit()
+
+    resp = await auth_client.patch(
+        f"/api/sightings/{sighting.id}",
+        json={"latitude": 40.0},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["exif_lat"] == 40.0
+    assert data["exif_lon"] == 0.0  # unchanged

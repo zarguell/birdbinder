@@ -10,6 +10,9 @@ class SightingCreate(BaseModel):
 class SightingOverride(BaseModel):
     species_code: str | None = None
     pose_variant: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    location_display_name: str | None = None
 
 
 class SightingInfo(BaseModel):
