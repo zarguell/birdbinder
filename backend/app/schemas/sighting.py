@@ -7,6 +7,11 @@ class SightingCreate(BaseModel):
     location_display_name: str | None = None
 
 
+class SightingOverride(BaseModel):
+    species_code: str | None = None
+    pose_variant: str | None = None
+
+
 class SightingRead(BaseModel):
     id: str
     user_identifier: str
@@ -21,6 +26,13 @@ class SightingRead(BaseModel):
     notes: str | None
     manual_species_override: bool
     status: str
+    species_code: str | None = None
+    species_common: str | None = None
+    species_scientific: str | None = None
+    family: str | None = None
+    pose_variant: str | None = None
+    id_confidence: float | None = None
+    id_method: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -8,7 +8,9 @@ from app.db import get_db
 from app.dependencies import get_current_user
 from app.models.sighting import Sighting
 from app.models.job import Job
-from app.schemas.sighting import SightingRead, SightingList
+from app.models.enums import PoseVariant
+from app.schemas.sighting import SightingRead, SightingList, SightingOverride
+from app.services.species import get_species_by_code
 from app import storage, image
 
 router = APIRouter()
@@ -149,6 +151,56 @@ async def delete_sighting(
 
     await db.delete(sighting)
     await db.commit()
+
+
+@router.patch("/sightings/{sighting_id}", response_model=SightingRead)
+async def update_sighting(
+    sighting_id: str,
+    override: SightingOverride,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manual species override or pose variant update for a sighting."""
+    result = await db.execute(
+        select(Sighting).where(
+            Sighting.id == sighting_id, Sighting.user_identifier == user
+        )
+    )
+    sighting = result.scalar_one_or_none()
+    if not sighting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found"
+        )
+
+    if override.species_code is not None:
+        species = get_species_by_code(override.species_code)
+        if not species:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown species code: {override.species_code}",
+            )
+        sighting.species_code = species["species_code"]
+        sighting.species_common = species["common_name"]
+        sighting.species_scientific = species["scientific_name"]
+        sighting.family = species.get("family")
+        sighting.manual_species_override = True
+        sighting.id_method = "manual"
+        sighting.id_confidence = 1.0
+        sighting.status = "identified"
+
+    if override.pose_variant is not None:
+        valid_poses = [p.value for p in PoseVariant]
+        if override.pose_variant not in valid_poses:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid pose variant: {override.pose_variant}. "
+                f"Must be one of: {', '.join(valid_poses)}",
+            )
+        sighting.pose_variant = override.pose_variant
+
+    await db.commit()
+    await db.refresh(sighting)
+    return sighting
 
 
 @router.post("/sightings/{sighting_id}/identify")

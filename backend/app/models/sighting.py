@@ -32,6 +32,13 @@ class Sighting(Base):
     status: Mapped[str] = mapped_column(
         String(20), default="pending", index=True
     )
+    species_code: Mapped[str | None] = mapped_column(String(6), nullable=True, index=True)
+    species_common: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    species_scientific: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    family: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pose_variant: Mapped[str | None] = mapped_column(String(20), nullable=True, default="other")
+    id_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    id_method: Mapped[str | None] = mapped_column(String(20), nullable=True, default="manual")
 
     cards: Mapped[list["Card"]] = relationship(  # noqa: F821
         "Card", back_populates="sighting", lazy="selectin"
