@@ -52,7 +52,7 @@
 		} else if (e.key === 'Enter' && highlightIndex >= 0) {
 			e.preventDefault();
 			const item = results[highlightIndex];
-			selectItem(item.code, item.common_name);
+			selectItem(item.species_code, item.common_name);
 		} else if (e.key === 'Escape') {
 			open = false;
 		}
@@ -95,7 +95,7 @@
 				<li>
 					<button
 						type="button"
-						onclick={() => selectItem(item.code, item.common_name)}
+						onclick={() => selectItem(item.species_code, item.common_name)}
 						class="w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-800
 							{i === highlightIndex ? 'bg-gray-800 text-green-400' : 'text-gray-300'}"
 					>

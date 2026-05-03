@@ -1,5 +1,11 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, computed_field
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.schemas.card import CardRead
 
 
 class SightingCreate(BaseModel):
@@ -33,6 +39,7 @@ class SightingRead(BaseModel):
     pose_variant: str | None = None
     id_confidence: float | None = None
     id_method: str | None = None
+    cards: list[CardRead] = []
 
     model_config = {"from_attributes": True}
 

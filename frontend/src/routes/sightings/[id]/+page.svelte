@@ -399,9 +399,9 @@ async function handleIdentify() {
 							href="/cards/{card.id}"
 							class="rounded-xl border border-gray-800 bg-gray-900/50 overflow-hidden transition-colors hover:border-gray-700 hover:bg-gray-900"
 						>
-							{#if card.art_url}
+							{#if card.card_art_url}
 								<img
-									src={card.art_url}
+									src={card.card_art_url}
 									alt={card.species_common ?? 'Card'}
 									class="w-full aspect-[2.5/3.5] object-cover bg-gray-800"
 									loading="lazy"
@@ -416,14 +416,14 @@ async function handleIdentify() {
 							<div class="p-3 flex items-center justify-between">
 								<div class="min-w-0">
 									<p class="text-sm font-medium truncate">{card.species_common ?? 'Card'}</p>
-									{#if card.rarity}
+									{#if card.rarity_tier}
 										<span class="text-xs font-medium
-											{card.rarity === 'common' ? 'text-gray-400' :
-											 card.rarity === 'uncommon' ? 'text-green-400' :
-											 card.rarity === 'rare' ? 'text-blue-400' :
-											 card.rarity === 'epic' ? 'text-purple-400' :
+											{card.rarity_tier === 'common' ? 'text-gray-400' :
+											 card.rarity_tier === 'uncommon' ? 'text-green-400' :
+											 card.rarity_tier === 'rare' ? 'text-blue-400' :
+											 card.rarity_tier === 'epic' ? 'text-purple-400' :
 											 'text-yellow-400'}">
-											{card.rarity}
+											{card.rarity_tier}
 										</span>
 									{/if}
 								</div>

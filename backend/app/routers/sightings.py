@@ -268,6 +268,7 @@ async def get_sighting_job(
             "status": job.status,
             "error": job.error,
             "result": job.result,
+            "raw_response": job.raw_response,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "completed_at": job.completed_at.isoformat() if job.completed_at else None,
         }

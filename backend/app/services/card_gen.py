@@ -102,6 +102,9 @@ def _run_card_generation(job_id: str, sighting_id: str):
             session.commit()
         except Exception as e:
             job = session.get(Job, job_id)
+            if not job:
+                logger.error("Job %s not found during error handling", job_id)
+                return
             job.status = JobStatus.failed.value
             job.error = str(e)
             job.completed_at = datetime.now(timezone.utc)

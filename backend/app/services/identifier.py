@@ -104,6 +104,26 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             sighting.id_confidence = confidence
             sighting.id_method = "ai"
 
+            # Reverse lookup species_code from common_name or scientific_name
+            def _load_birds_data():
+                from pathlib import Path
+                import json
+                path = Path(__file__).parent.parent / "data" / "birds.json"
+                with open(path) as f:
+                    return json.load(f)
+
+            common = result.get("common_name", "")
+            scientific = result.get("scientific_name", "")
+            birds = _load_birds_data()
+            matched = next(
+                (b for b in birds if b["common_name"] == common or b["scientific_name"] == scientific),
+                None
+            )
+            if matched:
+                sighting.species_code = matched["species_code"]
+            else:
+                logger.warning("Could not find species_code for %s / %s", common, scientific)
+
             # Update job
             job.status = JobStatus.completed.value
             job.completed_at = datetime.now(timezone.utc)
@@ -120,6 +140,9 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
         except Exception as e:
             logger.error("Job %s: identification failed: %s", job_id, e, exc_info=True)
             job = session.get(Job, job_id)
+            if not job:
+                logger.error("Job %s not found during error handling", job_id)
+                return
             job.status = JobStatus.failed.value
             job.error = str(e)
             job.completed_at = datetime.now(timezone.utc)
