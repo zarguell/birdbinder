@@ -162,7 +162,7 @@ export const auth = {
 // Profile
 export const profile = {
 	get: () => request<{ email: string; display_name: string | null; avatar_path: string | null; created_at: string | null; region: string | null }>('/profile'),
-	update: (data: { display_name?: string; region?: string }) => request<any>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+	update: (data: { display_name?: string; region?: string | null }) => request<any>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
 	uploadAvatar: (file: File) => {
 		const form = new FormData();
 		form.append('file', file);
