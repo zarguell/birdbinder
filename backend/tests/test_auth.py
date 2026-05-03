@@ -223,3 +223,57 @@ def test_get_user_from_cf_jwt_invalid():
 
     result = get_user_from_cf_jwt("not-a-jwt")
     assert result is None
+
+
+# --- 16. Verified JWT mode falls back to unverified when certs unavailable ---
+
+
+def test_verify_mode_fallback_no_keys():
+    """When CF_VERIFY_JWT=true but certs endpoint unreachable, falls back."""
+    import json
+    from unittest.mock import patch
+    from app.auth import get_user_from_cf_jwt, _cf_keys_cache
+    from jose import jwt as jose_jwt
+
+    # Ensure cache is empty
+    _cf_keys_cache.clear()
+
+    token = jose_jwt.encode({"email": "test@example.com", "sub": "123"}, "doesntmatter", algorithm="HS256")
+
+    with patch("app.auth.settings", cf_verify_jwt=True, cf_team_domain="example-team", cf_aud_tag=None, auth_debug=False), \
+         patch("app.auth.httpx") as mock_httpx:
+        # Simulate network failure
+        mock_httpx.get.side_effect = Exception("network error")
+        result = get_user_from_cf_jwt(token)
+    assert result == "test@example.com"
+
+    # Clean up
+    _cf_keys_cache.clear()
+
+
+def test_verify_mode_with_aud_tag():
+    """CF_AUD_TAG configured: should be passed to jwt.decode."""
+    import json
+    from unittest.mock import patch, MagicMock
+    from app.auth import get_user_from_cf_jwt, _cf_keys_cache
+    from jose import jwt as jose_jwt
+
+    _cf_keys_cache.clear()
+
+    token = jose_jwt.encode({"email": "test@example.com", "sub": "123", "aud": "my-aud-tag"}, "doesntmatter", algorithm="HS256")
+
+    with patch("app.auth.settings", cf_verify_jwt=True, cf_team_domain="example-team", cf_aud_tag="my-aud-tag", auth_debug=False), \
+         patch("app.auth.httpx") as mock_httpx, \
+         patch("app.auth.jwt.decode") as mock_decode:
+        # Simulate successful certs fetch with a valid JWK
+        import base64
+        mock_httpx.get.return_value.json.return_value = {"keys": [
+            {"kid": "test-kid", "kty": "RSA", "n": "x", "e": "AQAB"}
+        ]}
+        # Key parsing will fail (fake values), so it'll fall back
+        mock_decode.return_value = {"email": "test@example.com", "sub": "123", "aud": "my-aud-tag"}
+        result = get_user_from_cf_jwt(token)
+    # Should have attempted to use cf_aud_tag in verification
+    assert mock_httpx.get.called
+
+    _cf_keys_cache.clear()

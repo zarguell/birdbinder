@@ -100,6 +100,8 @@ async def auth_debug(request: Request):
         "config": {
             "cf_access_enabled": settings.cf_access_enabled,
             "cf_team_domain": settings.cf_team_domain,
+            "cf_aud_tag": settings.cf_aud_tag,
+            "cf_verify_jwt": settings.cf_verify_jwt,
             "api_keys_count": len(settings.parsed_api_keys),
             "auth_debug": settings.auth_debug,
         },

@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     api_keys: str = ""  # comma-separated
     cf_access_enabled: bool = False
     cf_team_domain: str = ""
+    cf_aud_tag: Optional[str] = None  # optional, verify audience matches this Access app
+    cf_verify_jwt: bool = False  # opt-in full JWT verification (RS256 + issuer + audience)
     ai_base_url: Optional[str] = None
     ai_model: str = "gpt-4o"
     ai_image_model: Optional[str] = None
