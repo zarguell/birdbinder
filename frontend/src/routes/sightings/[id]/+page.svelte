@@ -29,7 +29,11 @@
 					identifying = false;
 					await loadSighting();
 					if (jobStatus.status === 'failed') {
-						actionMessage = `Identification failed: ${jobStatus.error || 'Unknown error'}`;
+						let msg = `Identification failed: ${jobStatus.error || 'Unknown error'}`;
+						if (jobStatus.raw_response) {
+							msg += `\n\nAI response:\n${jobStatus.raw_response}`;
+						}
+						actionMessage = msg;
 						actionMessageType = 'error';
 					} else if (jobStatus.status === 'completed') {
 						actionMessage = '';
@@ -376,14 +380,14 @@ async function handleIdentify() {
 			</div>
 		</div>
 
-		<!-- Action Message -->
-		{#if actionMessage}
-			<div class="rounded-xl border p-4 {actionMessageType === 'error'
-				? 'border-red-500/30 bg-red-500/10'
-				: 'border-green-500/30 bg-green-500/10'}">
-				<p class="text-sm {actionMessageType === 'error' ? 'text-red-300' : 'text-green-300'}">{actionMessage}</p>
-			</div>
-		{/if}
+	<!-- Action Message -->
+	{#if actionMessage}
+		<div class="rounded-xl border p-4 {actionMessageType === 'error'
+			? 'border-red-500/30 bg-red-500/10'
+			: 'border-green-500/30 bg-green-500/10'}">
+			<p class="text-sm whitespace-pre-wrap {actionMessageType === 'error' ? 'text-red-300' : 'text-green-300'}">{actionMessage}</p>
+		</div>
+	{/if}
 
 		<!-- Cards Section -->
 		{#if sighting.cards && sighting.cards.length > 0}

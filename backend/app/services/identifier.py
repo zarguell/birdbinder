@@ -50,12 +50,35 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
                 )
             try:
                 result = json.loads(result_text)
-            except json.JSONDecodeError as e:
-                logger.error(
-                    "Job %s: failed to parse AI JSON response: %s | raw text: %s",
-                    job_id, e, result_text[:1000],
-                )
-                raise
+            except json.JSONDecodeError:
+                # Model may have returned prose with JSON embedded — try to extract it
+                import re
+                json_match = re.search(r'\{[^{}]*\}', result_text)
+                if json_match:
+                    logger.info("Job %s: extracted JSON from prose response", job_id)
+                    result_text = json_match.group(0)
+                    try:
+                        result = json.loads(result_text)
+                    except json.JSONDecodeError:
+                        # Try balanced brace matching for nested JSON
+                        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+                        if json_match:
+                            try:
+                                result = json.loads(json_match.group(0))
+                            except json.JSONDecodeError as e:
+                                logger.error(
+                                    "Job %s: failed to parse AI JSON response: %s | raw text: %s",
+                                    job_id, e, result_text[:1000],
+                                )
+                                raise
+                        else:
+                            raise
+                else:
+                    logger.error(
+                        "Job %s: failed to parse AI JSON response: no JSON found in prose | raw text: %s",
+                        job_id, result_text[:1000],
+                    )
+                    raise json.JSONDecodeError("No JSON found in response", result_text, 0)
 
             # Validate pose_variant
             valid_poses = [p.value for p in PoseVariant]
