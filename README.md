@@ -11,13 +11,21 @@ Self-hosted, API-first PWA that turns bird sightings into collectible digital ca
 - **Binders** — Organize cards in custom binders with filtering by rarity, pose, date, and species
 - **Sets** — Create curated card sets with completion tracking and missing-card detection
 - **Trading** — Offer and accept card-for-card trades between users
+- **Activity Feed** — Social timeline showing recent identifications, card generations, and binder additions with likes and comments
+- **AI Settings** — Configurable AI model, image model, and identification prompt from the web UI (persists to DB, falls back to env vars)
+- **Location Override** — Inline-editable location on sighting details with lat/lng and display name
+- **Species Selector** — Searchable dropdown with family grouping for manual species override
+- **Card Deletion** — Two-click confirmation with auto-cancel
+- **User Regions** — Select a region (e.g., US) to track collection against local species
+- **Collection Tracker** — Progress page showing discovered vs. undiscovered species with mystery cards and family grouping
+- **eBird Live Rarity** — Optional live rarity data from eBird API (overrides static taxonomy-based rarity)
 - **PWA** — Installable on mobile with responsive card grid and touch-friendly UI
 
 ## Tech Stack
 
 | Layer | Tech |
 |-------|------|
-| Backend | Python 3.13, FastAPI, SQLAlchemy (async), Alembic |
+| Backend | Python 3.13, FastAPI, SQLAlchemy (async) — schema via create_all |
 | Frontend | SvelteKit (static adapter), Tailwind CSS v4 |
 | Database | SQLite (aiosqlite) |
 | Jobs | Huey (SQLite-backed) |
@@ -75,12 +83,13 @@ All config via environment variables (or `.env` file):
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/birdbinder.db` | SQLAlchemy database URL |
 | `STORAGE_PATH` | `./storage` | Directory for uploaded images and card art |
 | `EBIRD_API_KEY` | — | eBird API key (optional, for data enrichment) |
+| `HUEY_IMPERMANENT_DB` | `true` | Use in-memory SQLite for Huey task queue (production) |
 
 ## User Guide
 
 See [USER_GUIDE.md](USER_GUIDE.md) for end-user documentation — uploading sightings, collecting cards, binders, sets, and trading.
 
-## Project Structure
+## Development
 
 ### Backend
 
@@ -127,11 +136,14 @@ birdbinder/
 │   │   ├── routers/         # API endpoints (sightings, cards, binders, sets, trades)
 │   │   ├── services/        # Business logic (AI ID, card gen, rarity, species)
 │   │   └── data/            # SQLite DB, eBird taxonomy JSON, uploaded images
-│   ├── migrations/          # Alembic migrations
-│   └── tests/               # pytest (152 tests)
+│   │       └── regions.json # Regional species lists for collection tracker
+│   ├── migrations/          # Not used — schema created via SQLAlchemy create_all
+│   └── tests/               # pytest (265 tests)
 ├── frontend/
 │   └── src/
 │       ├── routes/          # SvelteKit pages (upload, sightings, binders, sets, trades)
+│       │   ├── collection/  # Collection tracker (discovered/undiscovered species)
+│       │   └── feed/        # Activity feed (identifications, card gens, likes, comments)
 │       └── lib/
 │           ├── api.ts       # Typed API client
 │           └── components/  # Svelte components (CardComponent, CardModal, etc.)
