@@ -527,6 +527,33 @@ async def test_generate_card_art_falls_back_to_ai_model(mock_settings, fake_imag
 # ---------------------------------------------------------------------------
 
 
+def test_huey_tasks_registered_on_app_import():
+    """Importing app should register all @huey.task() decorated functions.
+
+    The huey consumer only loads app.huey_instance — if task modules aren't
+    imported in __init__.py, the registry is empty and dequeue fails with
+    'X not found in TaskRegistry'.
+    """
+    import importlib
+    import app
+    importlib.reload(app)  # ensure fresh import
+
+    from app.huey_instance import huey
+    registry = huey._registry
+
+    expected_tasks = {
+        "app.services.identifier.identify_task",
+        "app.services.card_gen.generate_card_task",
+    }
+    registered = set(registry._registry.keys())
+
+    missing = expected_tasks - registered
+    assert not missing, f"Tasks not registered after app import: {missing}"
+    assert expected_tasks.issubset(registered), (
+        f"Expected {expected_tasks}, got {registered}"
+    )
+
+
 @patch("app.services.ai.settings")
 async def test_generate_text_to_image_happy_path(mock_settings):
     """Sends correct payload to /images/generations."""
