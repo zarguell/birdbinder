@@ -5,6 +5,7 @@ from app.models.trade import Trade, TradeStatus
 from app.models.species import SpeciesCache
 from app.models.job import Job, JobType, JobStatus
 from app.models.enums import SightingStatus
+from app.models.binder import Binder, BinderCard
 
 __all__ = [
     "Sighting",
@@ -18,4 +19,6 @@ __all__ = [
     "JobType",
     "JobStatus",
     "TradeStatus",
+    "Binder",
+    "BinderCard",
 ]
