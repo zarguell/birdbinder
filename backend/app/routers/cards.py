@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.dependencies import get_current_user
+from app.models.binder import BinderCard
 from app.models.card import Card
 from app.models.sighting import Sighting
 from app.schemas.card import CardList, CardRead
@@ -98,5 +99,6 @@ async def delete_card(
     card = result.scalar_one_or_none()
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
+    await db.execute(sa_delete(BinderCard).where(BinderCard.card_id == card_id))
     await db.delete(card)
     await db.commit()
