@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-
 import pytest
 from app.models.user import User
 from app.services.ebird_service import (
