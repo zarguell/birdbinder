@@ -94,7 +94,13 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
             )
             elapsed = time.monotonic() - t0
             resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
+            resp_json = resp.json()
+            logger.info("AI vision response JSON: %s", resp_json)
+            content = resp_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                raise ValueError(
+                    f"AI returned empty content. Full response: {resp_json}"
+                )
             logger.info(
                 "AI vision response: status=%d elapsed=%.1fs content_len=%d model=%s",
                 resp.status_code, elapsed, len(content), model,

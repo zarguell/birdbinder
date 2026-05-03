@@ -185,6 +185,56 @@ async def test_call_vision_model_network_error(mock_settings, fake_image):
 
 
 @patch("app.services.ai.settings")
+async def test_call_vision_model_empty_content_raises(mock_settings, fake_image):
+    """Empty content from AI raises ValueError with response details."""
+    mock_settings.ai_api_key = "test-key"
+    mock_settings.ai_base_url = None
+    mock_settings.ai_model = "gpt-4o"
+
+    fake_response = {"choices": [{"message": {"content": ""}}]}
+    mock_post = AsyncMock(return_value=MagicMock(
+        status_code=200, json=lambda: fake_response,
+    ))
+    mock_post.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_post
+
+    with (
+        patch("app.services.ai.httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(ValueError, match="empty content"),
+    ):
+        await call_vision_model(str(fake_image), "test")
+
+
+@patch("app.services.ai.settings")
+async def test_call_vision_model_malformed_response_raises(mock_settings, fake_image):
+    """Response with no choices key raises ValueError."""
+    mock_settings.ai_api_key = "test-key"
+    mock_settings.ai_base_url = None
+    mock_settings.ai_model = "gpt-4o"
+
+    fake_response = {"unexpected": "structure"}
+    mock_post = AsyncMock(return_value=MagicMock(
+        status_code=200, json=lambda: fake_response,
+    ))
+    mock_post.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_post
+
+    with (
+        patch("app.services.ai.httpx.AsyncClient", return_value=mock_client),
+        pytest.raises(ValueError, match="empty content"),
+    ):
+        await call_vision_model(str(fake_image), "test")
+
+
+@patch("app.services.ai.settings")
 async def test_call_vision_model_png_converts_to_jpeg(mock_settings, fake_png):
     """PNG images are converted to JPEG before sending."""
     mock_settings.ai_api_key = "test-key"

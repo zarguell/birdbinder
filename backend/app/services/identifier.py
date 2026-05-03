@@ -39,6 +39,9 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             result_text = asyncio.run(call_vision_model(image_path, prompt))
             logger.info("Job %s: AI response received (%d chars): %s", job_id, len(result_text), result_text[:500])
 
+            # Store raw response on job (visible to user via API)
+            job.raw_response = result_text[:5000]
+
             # Parse JSON response
             result_text = result_text.strip()
             if result_text.startswith("```"):
