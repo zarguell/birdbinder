@@ -37,7 +37,7 @@
 		error = '';
 		try {
 			const [cardData, binderData] = await Promise.all([
-				cards.list({ limit: 200 }),
+				cards.list({ limit: 100 }),
 				binders.list({ limit: 50 })
 			]);
 			allCards = cardData.items ?? [];

@@ -39,7 +39,7 @@
 
 	async function loadTradeableCards() {
 		try {
-			const res = await cards.list({ limit: 200 });
+			const res = await cards.list({ limit: 100 });
 			tradeableCards = (res.items ?? []).filter((c: any) => c.tradeable && c.duplicate_count > 0);
 		} catch {
 			// Non-critical
