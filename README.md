@@ -34,7 +34,7 @@ cd birdbinder
 
 # Create environment
 cp backend/.env.example .env
-# Edit .env — at minimum set API_KEYS
+# Edit .env — at minimum set API_KEYS (or leave empty for local-only mode)
 
 # Start
 docker compose up -d
@@ -45,13 +45,24 @@ curl http://localhost:8000/api/health
 
 Open `http://localhost:8000` in your browser. The API docs are at `/api/docs`.
 
+## Authentication
+
+BirdBinder supports two auth mechanisms:
+
+| Method | Config | How it works |
+|--------|--------|-------------|
+| Bearer API key | `API_KEYS=key1,key2` | `Authorization: Bearer <key>` header |
+| Cloudflare Access | `CF_ACCESS_ENABLED=true` + `CF_TEAM_DOMAIN` | `CF_Authorization` JWT header |
+
+**Local development mode:** If neither `API_KEYS` nor `CF_ACCESS_ENABLED` is set, all requests are accepted as `local-user` with no authentication. This is convenient for local testing but **must not be used in production** — the server logs a warning at startup when running unauthenticated.
+
 ## Configuration
 
 All config via environment variables (or `.env` file):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `API_KEYS` | _(required)_ | Comma-separated API keys for Bearer auth |
+| `API_KEYS` | — | Comma-separated API keys for Bearer auth (omit for local mode) |
 | `APP_URL` | `http://localhost:8000` | Base URL for the app |
 | `AI_API_KEY` | — | OpenAI API key (enables AI identification + card art) |
 | `AI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API base URL |

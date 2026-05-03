@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,6 +9,8 @@ from pathlib import Path
 from app.config import settings
 from app.dependencies import get_current_user
 from app.routers import cards, sightings, species, jobs, binders, sets, trades
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="BirdBinder",
@@ -32,6 +36,14 @@ app.include_router(cards.router, prefix="/api", tags=["cards"])
 app.include_router(binders.router, prefix="/api", tags=["binders"])
 app.include_router(sets.router, prefix="/api", tags=["sets"])
 app.include_router(trades.router, prefix="/api", tags=["trades"])
+
+# Warn if running without authentication
+if not settings.parsed_api_keys and not settings.cf_access_enabled:
+    logger.warning(
+        "⚠ No authentication configured (API_KEYS and CF_ACCESS_ENABLED both unset). "
+        "All requests will be accepted as 'local-user'. "
+        "Do NOT use this configuration in production."
+    )
 
 
 @app.get("/api/health")
