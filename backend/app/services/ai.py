@@ -26,7 +26,12 @@ Return a JSON object with exactly these fields:
 If you cannot identify the bird, set confidence to 0 and put "Unknown" for names."""
 
 
-async def call_vision_model(image_path: str | Path, prompt: str) -> str:
+async def call_vision_model(
+    image_path: str | Path,
+    prompt: str,
+    model_override: str | None = None,
+    prompt_override: str | None = None,
+) -> str:
     """Send image to OpenAI-compatible vision API and return the text response."""
     if not settings.ai_api_key:
         raise ValueError("AI API key not configured")
@@ -59,7 +64,8 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
     mime = "image/jpeg"  # always JPEG after conversion
 
     base_url = (settings.ai_base_url or "https://api.openai.com/v1").rstrip("/")
-    model = settings.ai_model
+    model = model_override if model_override else settings.ai_model
+    effective_prompt = prompt_override if prompt_override else prompt
 
     logger.info(
         "AI vision call: model=%s base_url=%s image=%s (%.0f KB, %s)",
@@ -73,7 +79,7 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": prompt},
+            {"role": "system", "content": effective_prompt},
             {
                 "role": "user",
                 "content": [
@@ -339,6 +345,8 @@ async def generate_card_art(
     image_path: str | Path,
     species_info: dict,
     style_prompt: str | None = None,
+    image_model_override: str | None = None,
+    style_override: str | None = None,
 ) -> str:
     """Generate stylized card art for a sighting.
 
@@ -352,8 +360,8 @@ async def generate_card_art(
     if not settings.ai_api_key:
         return ""
 
-    image_model = settings.ai_image_model or settings.ai_model
-    style = style_prompt or settings.card_style_name or "vibrant watercolor"
+    image_model = image_model_override or settings.ai_image_model or settings.ai_model
+    style = style_override or style_prompt or settings.card_style_name or "vibrant watercolor"
 
     try:
         has_source_image = image_path and Path(image_path).is_file()

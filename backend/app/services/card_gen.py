@@ -52,10 +52,17 @@ def _run_card_generation(job_id: str, sighting_id: str):
             if settings.ai_api_key:
                 try:
                     from app.services.ai import generate_card_art
+                    from app.models.app_setting import AppSetting
 
                     image_path = ""
                     if sighting.photo_path:
                         image_path = str(get_file_path(sighting.photo_path))
+
+                    # Read DB overrides for image model and style
+                    db_image_model = session.query(AppSetting).filter(AppSetting.key == "ai_image_model").first()
+                    db_style = session.query(AppSetting).filter(AppSetting.key == "card_style_name").first()
+                    image_model_override = db_image_model.value if db_image_model else None
+                    style_override = db_style.value if db_style else None
 
                     species_info = {
                         "common_name": sighting.species_common or "Unknown",
@@ -67,6 +74,8 @@ def _run_card_generation(job_id: str, sighting_id: str):
                         generate_card_art(
                             image_path=image_path,
                             species_info=species_info,
+                            image_model_override=image_model_override,
+                            style_override=style_override,
                         )
                     )
                     if art_path:

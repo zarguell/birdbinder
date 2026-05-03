@@ -35,8 +35,12 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             logger.info("Job %s: calling AI vision model...", job_id)
 
             # Call AI
-            prompt = settings.birdbinder_id_prompt or DEFAULT_ID_PROMPT
-            result_text = asyncio.run(call_vision_model(image_path, prompt))
+            from app.models.app_setting import AppSetting
+            db_model = session.query(AppSetting).filter(AppSetting.key == "ai_model").first()
+            db_prompt = session.query(AppSetting).filter(AppSetting.key == "birdbinder_id_prompt").first()
+            model_override = db_model.value if db_model else None
+            prompt = (db_prompt.value if db_prompt else None) or settings.birdbinder_id_prompt or DEFAULT_ID_PROMPT
+            result_text = asyncio.run(call_vision_model(image_path, prompt, model_override=model_override))
             logger.info("Job %s: AI response received (%d chars): %s", job_id, len(result_text), result_text[:500])
 
             # Store raw response on job (visible to user via API)

@@ -9,6 +9,9 @@
 	let addError = $state('');
 	let addSuccess = $state('');
 	let flipped = $state(false);
+	let confirmDelete = $state(false);
+	let deleteTimer: ReturnType<typeof setTimeout> | null = null;
+	let deleting = $state(false);
 
 	const rarityConfig: Record<string, { bg: string; text: string; label: string }> = {
 		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common' },
@@ -78,6 +81,32 @@
 		if (e.key === 'Escape') onClose();
 	}
 
+	function handleDeleteClick() {
+		if (confirmDelete) {
+			deleteCard();
+		} else {
+			confirmDelete = true;
+			deleteTimer = setTimeout(() => { confirmDelete = false; deleteTimer = null; }, 3000);
+		}
+	}
+
+	async function deleteCard() {
+		deleting = true;
+		try {
+			await cards.delete(card.id);
+			onClose();
+		} catch (err) {
+			console.error('Failed to delete card:', err);
+			deleting = false;
+		}
+	}
+
+	function cancelDelete() {
+		if (deleteTimer) clearTimeout(deleteTimer);
+		deleteTimer = null;
+		confirmDelete = false;
+	}
+
 	$effect(() => {
 		if (card) {
 			loadBinders();
@@ -85,6 +114,8 @@
 			addSuccess = '';
 			selectedBinderId = '';
 			flipped = false;
+			confirmDelete = false;
+			deleting = false;
 			// Focus trap
 			document.addEventListener('keydown', handleKeydown);
 		}
@@ -238,13 +269,44 @@
 								{#if addError}
 									<p class="text-xs text-red-400">{addError}</p>
 								{/if}
-								{#if addSuccess}
-									<p class="text-xs text-green-400">{addSuccess}</p>
-								{/if}
-							</div>
-						{/if}
+							{#if addSuccess}
+								<p class="text-xs text-green-400">{addSuccess}</p>
+							{/if}
+						</div>
+					{/if}
+					<!-- Delete Card -->
+						<div class="border-t border-gray-800 pt-4">
+							{#if !confirmDelete}
+								<button
+									type="button"
+									onclick={handleDeleteClick}
+									class="w-full rounded-lg border border-red-800/50 bg-red-900/20 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/40 hover:text-red-300"
+								>
+									Delete Card
+								</button>
+							{:else}
+								<p class="mb-2 text-xs text-red-400">Are you sure? This cannot be undone.</p>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										onclick={cancelDelete}
+										class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-700"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										onclick={handleDeleteClick}
+										disabled={deleting}
+										class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+									>
+										{#if deleting}Deleting...{:else}Yes, Delete{/if}
+									</button>
+								</div>
+							{/if}
 					</div>
 				</div>
+			</div>
 			{:else}
 				<!-- CARD BACK VIEW -->
 				<div class="p-6 space-y-5">

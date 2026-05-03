@@ -128,6 +128,80 @@ async def test_call_vision_model_successful(mock_settings, fake_image):
 
 
 @patch("app.services.ai.settings")
+async def test_call_vision_model_with_model_override(mock_settings, fake_image):
+    """model_override parameter overrides settings.ai_model in the payload."""
+    mock_settings.ai_api_key = "test-key-123"
+    mock_settings.ai_base_url = "https://fake-ai.example.com/v1"
+    mock_settings.ai_model = "gpt-4o"
+
+    fake_response = {
+        "choices": [
+            {"message": {"content": '{"common_name": "Robin"}'}}
+        ]
+    }
+
+    mock_http_post = AsyncMock()
+    mock_http_post.return_value = MagicMock(
+        status_code=200,
+        json=lambda: fake_response,
+    )
+    mock_http_post.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_http_post
+
+    with patch("app.services.ai.httpx.AsyncClient", return_value=mock_client):
+        result = await call_vision_model(
+            str(fake_image), "Identify this bird:", model_override="claude-4-opus"
+        )
+
+    assert result == '{"common_name": "Robin"}'
+
+    # Verify the override model is used in payload
+    payload = mock_http_post.call_args[1]["json"]
+    assert payload["model"] == "claude-4-opus"
+
+
+@patch("app.services.ai.settings")
+async def test_call_vision_model_with_prompt_override(mock_settings, fake_image):
+    """prompt_override parameter overrides the system prompt in the payload."""
+    mock_settings.ai_api_key = "test-key-123"
+    mock_settings.ai_base_url = "https://fake-ai.example.com/v1"
+    mock_settings.ai_model = "gpt-4o"
+
+    fake_response = {
+        "choices": [
+            {"message": {"content": '{"common_name": "Robin"}'}}
+        ]
+    }
+
+    mock_http_post = AsyncMock()
+    mock_http_post.return_value = MagicMock(
+        status_code=200,
+        json=lambda: fake_response,
+    )
+    mock_http_post.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = mock_http_post
+
+    with patch("app.services.ai.httpx.AsyncClient", return_value=mock_client):
+        result = await call_vision_model(
+            str(fake_image), "default prompt", prompt_override="custom override prompt"
+        )
+
+    assert result == '{"common_name": "Robin"}'
+
+    # Verify the override prompt is used in the system message
+    payload = mock_http_post.call_args[1]["json"]
+    assert payload["messages"][0]["content"] == "custom override prompt"
+
+
+@patch("app.services.ai.settings")
 async def test_call_vision_model_http_error(mock_settings, fake_image):
     """HTTP errors are logged with status code and response body."""
     mock_settings.ai_api_key = "test-key"
