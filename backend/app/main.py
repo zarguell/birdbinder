@@ -56,15 +56,18 @@ async def me(user: str = Depends(get_current_user)):
     return {"user": user}
 
 
-# Serve frontend static assets
+# Serve frontend static assets (SvelteKit adapter-static output)
 static_dir = Path(__file__).parent / "static"
-assets_dir = static_dir / "assets"
-if static_dir.exists() and assets_dir.exists():
-    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+app_dir = static_dir / "_app"
+if static_dir.exists() and app_dir.exists():
+    # Mount SvelteKit build artifacts
+    app.mount("/_app", StaticFiles(directory=app_dir), name="sveltekit-app")
 
     @app.get("/{path:path}")
     async def serve_spa(path: str):
+        # Serve root-level static files (manifest.json, icons, robots.txt, etc.)
         file = static_dir / path
         if file.is_file():
             return FileResponse(file)
+        # SPA fallback — let client-side router handle it
         return FileResponse(static_dir / "index.html")
