@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import os
+
 import pytest
 from app.models.user import User
 from app.services.ebird_service import (
     FrequencyCache,
-from __future__ import annotations
-
-import pytest
-from app.models.user import User
+    get_ebird_api_key,
+    get_ebird_rarity_tier,
+)
 
 
 async def test_user_region_field(db_session):
@@ -141,4 +141,3 @@ def test_get_region_codes():
     assert isinstance(codes, set)
     assert len(codes) == 704
     assert "bbwduc" in codes
-
