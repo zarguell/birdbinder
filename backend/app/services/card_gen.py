@@ -43,7 +43,19 @@ def _run_card_generation(job_id: str, sighting_id: str):
             rarity_tier = "common"
             try:
                 from app.services.rarity import get_rarity_tier
-                rarity_tier = get_rarity_tier(sighting.species_code)
+                # Look up user's region for eBird live rarity
+                user_region = None
+                if sighting.user_identifier:
+                    try:
+                        from app.models.user import User
+                        user = session.query(User).filter(
+                            User.email == sighting.user_identifier
+                        ).first()
+                        if user and user.region:
+                            user_region = user.region
+                    except Exception:
+                        pass
+                rarity_tier = get_rarity_tier(sighting.species_code, region=user_region)
             except ImportError:
                 pass
 

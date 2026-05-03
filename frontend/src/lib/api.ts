@@ -161,8 +161,8 @@ export const auth = {
 
 // Profile
 export const profile = {
-	get: () => request<{ email: string; display_name: string | null; avatar_path: string | null; created_at: string | null }>('/profile'),
-	update: (data: { display_name?: string }) => request<any>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+	get: () => request<{ email: string; display_name: string | null; avatar_path: string | null; created_at: string | null; region: string | null }>('/profile'),
+	update: (data: { display_name?: string; region?: string }) => request<any>('/profile', { method: 'PATCH', body: JSON.stringify(data) }),
 	uploadAvatar: (file: File) => {
 		const form = new FormData();
 		form.append('file', file);
@@ -171,6 +171,17 @@ export const profile = {
 			return res.json();
 		});
 	}
+};
+
+// Collection
+export const collection = {
+	regions: () => request<any[]>('/regions'),
+	regionSpecies: (regionId: string) => request<any[]>(`/regions/${regionId}/species`),
+	progress: (params?: { family_group?: boolean }) => {
+		const q = new URLSearchParams();
+		if (params?.family_group) q.set('family_group', 'true');
+		return request<any>(`/collection/progress?${q}`);
+	},
 };
 
 // AI Settings

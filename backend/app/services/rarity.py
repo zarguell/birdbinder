@@ -107,23 +107,36 @@ def _load_species_family_map() -> dict[str, str]:
 def get_rarity_tier(
     species_code: str | None,
     family: str | None = None,
+    region: str | None = None,
 ) -> str:
     """Get rarity tier for a species.
 
-    Uses family-based base rarity with deterministic hash-based variation.
-    The same species_code always returns the same tier regardless of
-    how many times it's called.
+    If *region* is provided and eBird live frequency data is available,
+    the tier is determined from observation frequency.  Otherwise the
+    static family-based heuristic is used as a fallback.
 
     Args:
         species_code: 6-letter eBird species code.
         family: Optional family name override. If not provided, the family
                 is looked up from the birds data using species_code.
+        region: Optional eBird region code (e.g. "US-NY").  When supplied,
+                live eBird frequency data takes priority over static logic.
 
     Returns:
         One of: "common", "uncommon", "rare", "epic", "legendary"
     """
     if not species_code:
         return "common"
+
+    # Check eBird live data first if region is provided
+    if region and species_code:
+        try:
+            from app.services.ebird_service import _cache as ebird_cache, get_ebird_rarity_tier
+            freq = ebird_cache.get(region, species_code)
+            if freq is not None:
+                return get_ebird_rarity_tier(region, species_code, frequency=freq)
+        except Exception:
+            pass
 
     # Load maps lazily
     family_map = _load_family_rarity_map()

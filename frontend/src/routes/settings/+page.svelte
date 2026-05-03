@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { aiSettings, auth } from '$lib/api';
+    import { aiSettings, auth, collection, profile } from '$lib/api';
 
     let settings = $state<Record<string, any>>({});
     let originals = $state<Record<string, string>>({});
@@ -7,6 +7,12 @@
     let saving = $state(false);
     let message = $state<{ type: 'success' | 'error'; text: string } | null>(null);
     let authInfo = $state<{ ai_base_url: string; ai_enabled: boolean } | null>(null);
+
+    // Region picker state
+    let regions = $state<any[]>([]);
+    let currentRegion = $state<string | null>(null);
+    let regionLoading = $state(false);
+    let regionMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
 
     async function loadSettings() {
         loading = true;
@@ -30,6 +36,35 @@
             authInfo = info as any;
         } catch {
             // non-critical
+        }
+    }
+
+    async function loadRegion() {
+        try {
+            const [regionList, prof] = await Promise.all([
+                collection.regions(),
+                profile.get()
+            ]);
+            regions = regionList;
+            currentRegion = prof.region;
+        } catch {
+            // non-critical
+        }
+    }
+
+    async function onRegionChange(e: Event) {
+        const target = e.target as HTMLSelectElement;
+        const value = target.value || null;
+        regionLoading = true;
+        regionMessage = null;
+        try {
+            await profile.update({ region: value });
+            currentRegion = value;
+            regionMessage = { type: 'success', text: 'Region updated!' };
+        } catch (err: any) {
+            regionMessage = { type: 'error', text: err.message || 'Failed to update region' };
+        } finally {
+            regionLoading = false;
         }
     }
 
@@ -71,6 +106,7 @@
     $effect(() => {
         loadSettings();
         loadAuthSettings();
+        loadRegion();
     });
 </script>
 
@@ -180,6 +216,52 @@
                         {authInfo?.ai_enabled ? 'Yes' : 'No'}
                     </span>
                 </div>
+            </div>
+        </div>
+
+        <!-- Region picker -->
+        <div class="mt-8 border-t border-gray-800 pt-6">
+            <h2 class="mb-1 text-lg font-bold text-gray-100">Region</h2>
+            <p class="mb-4 text-xs text-gray-500">Select your birding region to customize species data and collection progress.</p>
+
+            {#if regionMessage}
+                <div class="mb-4 rounded-lg border px-4 py-2 text-sm {regionMessage.type === 'success' ? 'border-green-800/50 bg-green-900/30 text-green-400' : 'border-red-800/50 bg-red-900/30 text-red-400'}">
+                    {regionMessage.text}
+                    <button
+                        type="button"
+                        onclick={() => (regionMessage = null)}
+                        class="ml-2 opacity-60 hover:opacity-100"
+                    >✕</button>
+                </div>
+            {/if}
+
+            <div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
+                <div class="mb-1 flex items-center justify-between">
+                    <label for="region-select" class="text-sm font-semibold text-gray-200">Birding Region</label>
+                    {#if currentRegion}
+                        <span class="rounded-full bg-green-900/30 px-2 py-0.5 text-xs text-green-400">
+                            ✓ Active
+                        </span>
+                    {/if}
+                </div>
+                <select
+                    id="region-select"
+                    onchange={onRegionChange}
+                    disabled={regionLoading}
+                    class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 focus:border-green-500 focus:outline-none disabled:opacity-50"
+                >
+                    <option value="" selected={!currentRegion}>
+                        Select your region...
+                    </option>
+                    {#each regions as r}
+                        <option value={r.code} selected={currentRegion === r.code}>
+                            {r.name}
+                        </option>
+                    {/each}
+                </select>
+                {#if regionLoading}
+                    <p class="mt-2 text-xs text-gray-500">Saving...</p>
+                {/if}
             </div>
         </div>
     {/if}

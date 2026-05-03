@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import pytest
 from app.models.user import User
+from tests.conftest import TEST_USER
 from app.services.ebird_service import (
     FrequencyCache,
     get_ebird_api_key,
@@ -140,3 +141,107 @@ def test_get_region_codes():
     assert isinstance(codes, set)
     assert len(codes) == 704
     assert "bbwduc" in codes
+
+
+# ---------------------------------------------------------------------------
+# Collection progress tests
+# ---------------------------------------------------------------------------
+
+
+async def test_collection_progress_empty(auth_client):
+    """GET /api/collection/progress returns 200 with total_species=704 and discovered_count=0."""
+    resp = await auth_client.get("/api/collection/progress")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_species"] == 704
+    assert data["discovered_count"] == 0
+    assert len(data["discovered"]) == 0
+    assert len(data["missing"]) == 704
+
+
+async def test_collection_progress_with_card(auth_client, db_session):
+    """Creating a card should show up as discovered in collection progress."""
+    from app.models.card import Card
+
+    card = Card(
+        user_identifier=TEST_USER,
+        species_code="norcar",
+        species_common="Northern Cardinal",
+        rarity_tier="common",
+    )
+    db_session.add(card)
+    await db_session.commit()
+
+    resp = await auth_client.get("/api/collection/progress")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["discovered_count"] >= 1
+    discovered_codes = [s["species_code"] for s in data["discovered"]]
+    assert "norcar" in discovered_codes
+
+
+async def test_collection_progress_family_group(auth_client):
+    """GET /api/collection/progress?family_group=true returns family groups."""
+    resp = await auth_client.get("/api/collection/progress?family_group=true")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "family_groups" in data
+    assert len(data["family_groups"]) > 0
+    fg = data["family_groups"][0]
+    assert "family" in fg
+    assert "total" in fg
+    assert "discovered" in fg
+    assert "species" in fg
+    for sp in fg["species"]:
+        assert "species_code" in sp
+        assert "common_name" in sp
+        assert "found" in sp
+
+
+# ---------------------------------------------------------------------------
+# eBird + rarity integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_rarity_uses_ebird_when_available():
+    """When eBird cache has a low frequency for a normally-common species,
+    get_rarity_tier should return a rarer tier."""
+    from app.services.ebird_service import _cache as ebird_cache
+    from app.services.rarity import get_rarity_tier, TIERS
+
+    # Get the static tier first (no region = pure static)
+    static_tier = get_rarity_tier("amecro", region=None)
+    static_idx = TIERS.index(static_tier)
+
+    # Set a very low frequency in the eBird cache (legendary-range)
+    ebird_cache.set("US-NY", "amecro", 0.0001)
+    try:
+        tier = get_rarity_tier("amecro", region="US-NY")
+        ebird_idx = TIERS.index(tier)
+        # Low frequency should produce a rarer result (higher index)
+        assert ebird_idx > static_idx, (
+            f"Expected eBird tier {tier} to be rarer than static {static_tier}"
+        )
+    finally:
+        ebird_cache.clear("US-NY")
+
+
+def test_rarity_falls_back_to_static():
+    """When eBird cache has no data, get_rarity_tier should return static result."""
+    from app.services.rarity import get_rarity_tier
+
+    # Use a region that definitely has no cached data
+    tier_with_region = get_rarity_tier("amecro", region="XX-EMPTY-NO-DATA")
+    tier_without = get_rarity_tier("amecro")
+    assert tier_with_region == tier_without
+
+
+def test_rarity_region_param_optional():
+    """get_rarity_tier works without region param (backward compat)."""
+    from app.services.rarity import get_rarity_tier
+
+    # These calls should be equivalent and both return a valid tier
+    tier1 = get_rarity_tier("amecro")
+    tier2 = get_rarity_tier("amecro", family=None)
+    assert tier1 == tier2
+    assert tier1 in ("common", "uncommon", "rare", "epic", "legendary")
