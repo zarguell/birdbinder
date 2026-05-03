@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime
 
 from app.db import get_db
 from app.dependencies import get_current_user
@@ -10,6 +11,7 @@ from app.schemas.binder import (
     BinderCreate, BinderUpdate, BinderRead, BinderList,
     BinderCardRead, AddCardToBinder,
 )
+from app.schemas.card import CardRead
 
 router = APIRouter()
 
@@ -79,6 +81,50 @@ async def get_binder(
     return BinderRead.model_validate(binder, from_attributes=True).model_copy(
         update={"card_count": cc}
     )
+
+
+@router.get("/binders/{binder_id}/cards", response_model=list[CardRead])
+async def list_binder_cards(
+    binder_id: str,
+    rarity: str | None = Query(default=None, description="Filter by rarity tier"),
+    pose_variant: str | None = Query(default=None, description="Filter by pose variant"),
+    date_from: datetime | None = Query(default=None, description="Filter cards generated after this date"),
+    date_to: datetime | None = Query(default=None, description="Filter cards generated before this date"),
+    duplicates_only: bool = Query(default=False, description="Only show cards with duplicate_count > 1"),
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[CardRead]:
+    """List cards in a binder with optional filtering."""
+    # Verify binder ownership
+    result = await db.execute(
+        select(Binder).where(Binder.id == binder_id, Binder.user_identifier == user)
+    )
+    binder = result.scalar_one_or_none()
+    if not binder:
+        raise HTTPException(status_code=404, detail="Binder not found")
+
+    # Build query: cards that are in this binder
+    query = (
+        select(Card)
+        .join(BinderCard, BinderCard.card_id == Card.id)
+        .where(BinderCard.binder_id == binder_id)
+    )
+
+    if rarity is not None:
+        query = query.where(Card.rarity_tier == rarity.lower())
+    if pose_variant is not None:
+        query = query.where(Card.pose_variant == pose_variant.lower())
+    if date_from is not None:
+        query = query.where(Card.generated_at >= date_from)
+    if date_to is not None:
+        query = query.where(Card.generated_at <= date_to)
+    if duplicates_only:
+        query = query.where(Card.duplicate_count > 1)
+
+    query = query.order_by(BinderCard.position)
+    result = await db.execute(query)
+    cards = result.scalars().all()
+    return cards
 
 
 @router.patch("/binders/{binder_id}", response_model=BinderRead)

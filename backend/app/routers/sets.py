@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
 
 from app.db import get_db
 from app.dependencies import get_current_user
@@ -138,3 +139,30 @@ async def get_set_progress(
         missing=missing,
         progress_percent=round(len(collected_codes) / len(targets) * 100, 1) if targets else 100.0,
     )
+
+
+@router.get("/sets/{set_id}/missing", response_model=list[str])
+async def get_set_missing(
+    set_id: str,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[str]:
+    """Return the list of species codes not yet collected by the user for a set."""
+    result = await db.execute(select(CardSet).where(CardSet.id == set_id))
+    card_set = result.scalar_one_or_none()
+    if not card_set:
+        raise HTTPException(status_code=404, detail="Set not found")
+
+    targets = card_set.card_targets or []
+    if not targets:
+        return []
+
+    # Get user's collected species codes
+    result = await db.execute(
+        select(Card.species_code).where(
+            Card.user_identifier == user,
+            Card.species_code.in_(targets),
+        )
+    )
+    collected_codes = {r[0] for r in result.all()}
+    return [t for t in targets if t not in collected_codes]

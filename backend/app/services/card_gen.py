@@ -37,19 +37,26 @@ def _run_card_generation(job_id: str, sighting_id: str):
 
             # Determine card art URL
             card_art_url = None
-            if settings.ai_api_key and sighting.photo_path:
+            if settings.ai_api_key:
                 # Try AI-generated card art
                 try:
-                    style = settings.card_style_name or "vibrant watercolor"
-                    prompt = CARD_ART_PROMPT_TEMPLATE.format(
-                        common_name=sighting.species_common or "Unknown",
-                        scientific_name=sighting.species_scientific or "Unknown",
-                        pose=sighting.pose_variant or "perching",
-                        style=style,
+                    import asyncio
+                    from app.services.ai import generate_card_art
+
+                    species_info = {
+                        "common_name": sighting.species_common or "Unknown",
+                        "scientific_name": sighting.species_scientific or "Unknown",
+                        "pose_variant": sighting.pose_variant or "perching",
+                        "rarity_tier": rarity_tier,
+                    }
+                    art_path = asyncio.get_event_loop().run_until_complete(
+                        generate_card_art(
+                            image_path=sighting.photo_path or "",
+                            species_info=species_info,
+                        )
                     )
-                    # In the future, this would call an image generation API
-                    # For now, we fall through to use the original photo
-                    card_art_url = None
+                    if art_path:
+                        card_art_url = f"/api/storage/{art_path}"
                 except Exception:
                     card_art_url = None
 
