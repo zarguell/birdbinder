@@ -1,10 +1,14 @@
 import base64
+import logging
+import time
 import uuid as _uuid
 from pathlib import Path
 
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ID_PROMPT = """\
 You are an expert bird identifier. Analyze this bird photograph and identify the species.
@@ -39,13 +43,21 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
     }
     mime = mime_map.get(ext, "image/jpeg")
 
-    base_url = settings.ai_base_url or "https://api.openai.com/v1"
+    base_url = (settings.ai_base_url or "https://api.openai.com/v1").rstrip("/")
+    model = settings.ai_model
+    image_size_kb = len(image_data) * 3 / 4 / 1024
+
+    logger.info(
+        "AI vision call: model=%s base_url=%s image=%s (%.0f KB, %s)",
+        model, base_url, image_path, image_size_kb, mime,
+    )
+
     headers = {
         "Authorization": f"Bearer {settings.ai_api_key}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": settings.ai_model,
+        "model": model,
         "messages": [
             {"role": "system", "content": prompt},
             {
@@ -62,12 +74,31 @@ async def call_vision_model(image_path: str | Path, prompt: str) -> str:
         "max_tokens": 500,
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            f"{base_url}/chat/completions", headers=headers, json=payload
+    t0 = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{base_url}/chat/completions", headers=headers, json=payload
+            )
+            elapsed = time.monotonic() - t0
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+            logger.info(
+                "AI vision response: status=%d elapsed=%.1fs content_len=%d model=%s",
+                resp.status_code, elapsed, len(content), model,
+            )
+            return content
+    except httpx.HTTPStatusError as e:
+        elapsed = time.monotonic() - t0
+        logger.error(
+            "AI vision HTTP error: status=%d elapsed=%.1fs body=%s",
+            e.response.status_code, elapsed, e.response.text[:500],
         )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        raise
+    except Exception as e:
+        elapsed = time.monotonic() - t0
+        logger.error("AI vision error after %.1fs: %s", elapsed, e)
+        raise
 
 
 # -- Card art generation -----------------------------------------------------
@@ -230,15 +261,19 @@ async def generate_card_art(
             # Try image-to-image first (better likeness preservation)
             prompt = _build_image_to_art_prompt(species_info, style)
             try:
+                logger.info("Card art: trying image-to-image with model=%s", image_model)
                 b64 = await _generate_image_to_image(image_path, prompt, image_model)
+                logger.info("Card art: image-to-image succeeded")
                 return _save_b64_image(b64)
-            except Exception:
-                # Image-to-image failed, fall through to text-to-image
-                pass
+            except Exception as e:
+                logger.warning("Card art: image-to-image failed (%s), falling back to text-to-image", e)
 
         # Text-to-image (no photo or image-to-image failed)
         prompt = _build_art_prompt(species_info, style)
+        logger.info("Card art: text-to-image with model=%s", image_model)
         b64 = await _generate_text_to_image(prompt, image_model)
+        logger.info("Card art: text-to-image succeeded")
         return _save_b64_image(b64)
-    except Exception:
+    except Exception as e:
+        logger.error("Card art generation failed: %s", e, exc_info=True)
         return ""
