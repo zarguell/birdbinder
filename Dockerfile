@@ -20,14 +20,14 @@ RUN adduser --system --group appuser
 
 WORKDIR /app
 
-# Install Python dependencies (without dev extras)
-COPY backend/pyproject.toml ./pyproject.toml
-RUN uv pip install --system --no-cache -e .
-
-# Copy backend application code
+# Copy backend code first (needed by hatchling to discover packages)
+COPY backend/pyproject.toml ./
 COPY backend/app/ ./app/
 COPY backend/migrations/ ./migrations/
 COPY backend/alembic.ini ./
+
+# Install Python dependencies (non-editable — Docker doesn't need it)
+RUN uv pip install --system --no-cache .
 
 # Copy built frontend static files from stage 1
 COPY --from=frontend-build /backend/app/static/ ./app/static/
