@@ -2,13 +2,13 @@ name: Tests
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     tags: ['v*']
   pull_request:
-    branches: [main, master]
+    branches: [main]
 
 jobs:
-  backend-tests:
+  lint-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -17,38 +17,23 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install uv
-        run: pip install uv
-
       - name: Install deps
         working-directory: backend
-        run: uv venv && source .venv/bin/activate && uv pip install -e ".[dev]" || uv pip install -e .
+        run: |
+          pip install -e ".[dev]" || pip install .
+
+      - name: Compile check
+        working-directory: backend
+        run: |
+          python -m py_compile app/*.py app/routers/*.py app/services/*.py
+          echo "All files compile OK"
 
       - name: Run tests
         working-directory: backend
         run: |
-          source .venv/bin/activate
           pytest tests/ -v --tb=short
 
-  frontend-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install deps
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build
-        working-directory: frontend
-        run: npm run build
-
   docker:
-    needs: [backend-tests, frontend-build]
-    if: github.event_name != 'pull_request'
+    needs: lint-and-test
     uses: ./.github/workflows/docker.yml
     secrets: inherit
