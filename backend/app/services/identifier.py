@@ -141,6 +141,20 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             }
             session.commit()
             logger.info("Job %s: identification complete", job_id)
+
+            # Publish activity
+            try:
+                from app.models.activity import Activity
+                activity = Activity(
+                    user_identifier=sighting.user_identifier,
+                    activity_type="sighting",
+                    reference_id=sighting_id,
+                    description=f"spotted a {common_name}",
+                )
+                session.add(activity)
+                session.commit()
+            except Exception:
+                logger.warning("Failed to publish sighting activity", exc_info=True)
         except Exception as e:
             logger.error("Job %s: identification failed: %s", job_id, e, exc_info=True)
             job = session.get(Job, job_id)

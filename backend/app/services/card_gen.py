@@ -109,6 +109,20 @@ def _run_card_generation(job_id: str, sighting_id: str):
             job.completed_at = datetime.now(timezone.utc)
             job.result = {"card_id": card.id}
             session.commit()
+
+            # Publish activity
+            try:
+                from app.models.activity import Activity
+                activity = Activity(
+                    user_identifier=sighting.user_identifier,
+                    activity_type="card",
+                    reference_id=card.id,
+                    description=f"unlocked a {card.species_common} card",
+                )
+                session.add(activity)
+                session.commit()
+            except Exception:
+                logger.warning("Failed to publish card activity", exc_info=True)
         except Exception as e:
             job = session.get(Job, job_id)
             if not job:
