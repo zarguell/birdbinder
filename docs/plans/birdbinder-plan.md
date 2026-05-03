@@ -4,7 +4,7 @@
 
 **Goal:** Build a self-hosted, API-first PWA that turns bird sightings into collectible digital cards.
 
-**Architecture:** Monorepo with `backend/` (FastAPI) and `frontend/` (SvelteKit static adapter). SQLite via SQLAlchemy async + Alembic. Huey for background jobs (AI identification, card art generation). Local disk for image storage. No Docker — uv venvs for Python, npm for frontend.
+**Architecture:** Monorepo with `backend/` (FastAPI) and `frontend/` (SvelteKit static adapter). SQLite via SQLAlchemy async + Alembic. Huey for background jobs (AI identification, card art generation). Local disk for image storage. Production runs in Docker (multi-stage build). Dev uses uv venvs for Python, npm for frontend.
 
 **Tech Stack:**
 - Backend: Python 3.11+, FastAPI, SQLAlchemy (async), Alembic, aiosqlite, huey, Pillow, openai, python-jose (JWT), Pydantic v2
@@ -1021,6 +1021,149 @@ npm run test  # if vitest configured
 ```bash
 git add -A
 git commit -m "feat: final integration, OpenAPI docs, app shell navigation"
+```
+
+---
+
+## Deployment
+
+### Task 20: Dockerfile and docker-compose
+
+**Objective:** Multi-stage Dockerfile for production, docker-compose for local dev/deploy.
+
+**Reference:** `zarguell/sprout` Dockerfile pattern — multi-stage build, non-root user, entrypoint for volume-safe dir creation, healthcheck.
+
+**Files:**
+- Create: `Dockerfile`
+- Create: `docker-compose.yml`
+- Create: `entrypoint.sh`
+- Create: `.dockerignore`
+
+**Step 1: Create Dockerfile** — multi-stage build:
+
+```
+Stage 1: node:22-slim — build SvelteKit frontend
+Stage 2: python:3.13-slim — production runtime
+```
+
+Key details:
+- `RUN adduser --system --group appuser`
+- Copy built frontend from stage 1 into `/app/static/`
+- Install backend deps from `backend/pyproject.toml` via pip
+- Copy backend code, alembic config, bird taxonomy data
+- Create `/app/data/db` and `/app/storage` dirs owned by appuser
+- Non-root: `USER appuser`
+- Expose 8000
+- Entrypoint creates runtime dirs (volume-safe), runs alembic upgrade, starts uvicorn + huey worker
+- CMD: runs both uvicorn and huey consumer (supervisor or shell script)
+
+**Step 2: Create entrypoint.sh**
+
+```sh
+#!/bin/sh
+set -e
+
+# Ensure data directories exist (volume mounts overlay image dirs)
+mkdir -p /app/data/db /app/storage
+
+# Run migrations
+alembic upgrade head
+
+# Start uvicorn + huey worker
+exec "$@"
+```
+
+**Step 3: Create docker-compose.yml**
+
+```yaml
+services:
+  birdbinder:
+    image: zarguell/birdbinder:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - birdbinder-data:/app/data
+      - birdbinder-storage:/app/storage
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  birdbinder-data:
+  birdbinder-storage:
+```
+
+**Step 4: Create .dockerignore**
+
+```
+.git
+node_modules
+.venv
+__pycache__
+*.pyc
+.env
+backend/data/
+backend/storage/
+.svelte-kit
+*.db
+```
+
+**Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: Dockerfile, docker-compose, and entrypoint"
+```
+
+---
+
+### Task 21: CI/CD pipelines
+
+**Objective:** GitHub Actions for tests + Docker build/push. Follows sprout pattern: reusable workflow_call for Docker.
+
+**Reference:** `zarguell/sprout` — `.github/workflows/test.yml` (triggers, lint+test job, calls docker workflow) and `.github/workflows/docker.yml` (reusable, multi-platform, GHA cache, semver tags).
+
+**Files:**
+- Create: `.github/workflows/test.yml`
+- Create: `.github/workflows/docker.yml`
+
+**Step 1: Create .github/workflows/docker.yml** — reusable callable workflow:
+
+- Triggers: `workflow_call` with `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets
+- QEMU + Buildx setup
+- DockerHub login
+- Metadata: `zarguell/birdbinder` image, tags: `latest` on main, `dev` on dev branch, semver on tags, SHA
+- Build and push: `linux/amd64,linux/arm64`, GHA cache
+
+Pin all third-party actions to SHA (not tags), matching sprout convention.
+
+**Step 2: Create .github/workflows/test.yml**:
+
+- Triggers: push to main/dev, tags `v*`, PRs to main/dev
+- `lint-and-test` job: checkout, setup Python, install deps (pip), compile check, run pytest
+- `frontend-test` job: checkout, setup Node, install deps, run `npm run build` (and test if configured)
+- `docker` job: needs lint-and-test, calls `.github/workflows/docker.yml`, secrets inherit
+
+**Step 3: Verify workflow YAML is valid**
+
+```bash
+python -c "import yaml; yaml.safe_load(open('.github/workflows/docker.yml'))"
+python -c "import yaml; yaml.safe_load(open('.github/workflows/test.yml'))"
+```
+
+**Step 4: Commit**
+
+```bash
+git add -A
+git commit -m "ci: test and Docker build pipelines"
 ```
 
 ---
