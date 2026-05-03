@@ -165,3 +165,29 @@ export const profile = {
 		});
 	}
 };
+
+// AI Settings
+export const aiSettings = {
+	get: () => request<Record<string, any>>('/settings/ai'),
+	update: (settings: Record<string, string>) =>
+		request<any>('/settings/ai', { method: 'PATCH', body: JSON.stringify(settings) }),
+};
+
+// Feed (activity)
+export const feed = {
+	list: (params?: { limit?: number; offset?: number }) => {
+		const q = new URLSearchParams();
+		if (params?.limit) q.set('limit', String(params.limit));
+		if (params?.offset) q.set('offset', String(params.offset));
+		return request<any>(`/feed?${q}`);
+	},
+	like: (activityId: string) =>
+		request<any>(`/feed/${activityId}/like`, { method: 'POST' }),
+	unlike: (activityId: string) =>
+		request<any>(`/feed/${activityId}/like`, { method: 'DELETE' }),
+	comment: (activityId: string, content: string) =>
+		request<any>(`/feed/${activityId}/comments`, {
+			method: 'POST',
+			body: JSON.stringify({ content }),
+		}),
+};

@@ -49,6 +49,7 @@
 			<div class="flex items-center gap-4 text-sm">
 				<a href="/upload" class="text-gray-400 hover:text-white transition-colors">Upload</a>
 				<a href="/sightings" class="text-gray-400 hover:text-white transition-colors">Sightings</a>
+				<a href="/feed" class="text-gray-400 hover:text-white transition-colors">Feed</a>
 				<a href="/binder" class="text-gray-400 hover:text-white transition-colors">Binder</a>
 				<a href="/sets" class="text-gray-400 hover:text-white transition-colors">Sets</a>
 				<a href="/trades" class="text-gray-400 hover:text-white transition-colors">Trades</a>
