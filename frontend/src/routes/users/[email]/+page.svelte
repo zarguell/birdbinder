@@ -1,28 +1,40 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { users } from '$lib/api';
+		import { page } from '$app/stores';
+		import { onMount } from 'svelte';
+		import { users } from '$lib/api';
 
-	let profile = $state<any>(null);
-	let loading = $state(true);
-	let error = $state('');
+		let profile = $state<any>(null);
+		let loading = $state(true);
+		let error = $state('');
 
-	const email = $derived(decodeURIComponent($page.params.email));
+		let email = $state('');
 
-	async function loadProfile() {
-		loading = true;
-		error = '';
-		try {
-			profile = await users.getProfile(email);
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load profile';
-		} finally {
-			loading = false;
+		async function loadProfile() {
+			if (!email) return;
+			loading = true;
+			error = '';
+			try {
+				profile = await users.getProfile(email);
+			} catch (err) {
+				error = err instanceof Error ? err.message : 'Failed to load profile';
+			} finally {
+				loading = false;
+			}
 		}
-	}
 
-	$effect(() => {
-		if (email) loadProfile();
-	});
+		onMount(() => {
+			email = decodeURIComponent($page.params.email);
+			// Re-run on client-side navigation
+			const unsub = page.subscribe((p) => {
+				const newEmail = decodeURIComponent(p.params.email);
+				if (newEmail !== email) {
+					email = newEmail;
+					loadProfile();
+				}
+			});
+			loadProfile();
+			return unsub;
+		});
 
 	function formatDate(iso: string | null): string {
 		if (!iso) return '';
