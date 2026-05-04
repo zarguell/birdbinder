@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { trades, cards, ApiError } from '$lib/api';
+	import { page } from '$app/stores';
+	import { trades, cards, users, ApiError } from '$lib/api';
 
 	let allTrades = $state<any[]>([]);
 	let tradeableCards = $state<any[]>([]);
@@ -16,6 +17,46 @@
 	let formLoading = $state(false);
 	let formError = $state('');
 	let formSuccess = $state('');
+
+	// User search dropdown
+	let allUsers = $state<any[]>([]);
+	let dropdownOpen = $state(false);
+	let searchQuery = $state('');
+	let dropdownRef = $state<HTMLElement | null>(null);
+
+	const filteredUsers = $derived(
+		allUsers.filter((u) => {
+			const q = searchQuery.toLowerCase();
+			return (
+				(u.display_name?.toLowerCase() ?? '').includes(q) ||
+				u.email.toLowerCase().includes(q)
+			);
+		})
+	);
+
+	async function loadUsers() {
+		try {
+			allUsers = await users.list();
+		} catch {
+			// Non-critical
+		}
+	}
+
+	function handleClickOutside(e: MouseEvent) {
+		if (dropdownRef && !dropdownRef.contains(e.target as Node)) {
+			dropdownOpen = false;
+		}
+	}
+
+	function selectUser(user: any) {
+		formRecipient = user.email;
+		dropdownOpen = false;
+		searchQuery = '';
+	}
+
+	function clearRecipient() {
+		formRecipient = '';
+	}
 
 	const statusColors: Record<string, string> = {
 		pending: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50',
@@ -147,6 +188,22 @@
 	$effect(() => {
 		loadTrades();
 		loadTradeableCards();
+		loadUsers();
+
+		const toParam = $page.url.searchParams.get('to');
+		if (toParam) {
+			formRecipient = toParam;
+			showCreateForm = true;
+		}
+	});
+
+	$effect(() => {
+		if (dropdownOpen) {
+			document.addEventListener('click', handleClickOutside);
+		} else {
+			document.removeEventListener('click', handleClickOutside);
+		}
+		return () => document.removeEventListener('click', handleClickOutside);
 	});
 </script>
 
@@ -190,15 +247,70 @@
 			{/if}
 
 			<div>
-				<label for="trade-recipient" class="mb-1 block text-sm font-medium text-gray-400">Recipient *</label>
-				<input
-					id="trade-recipient"
-					type="text"
-					required
-					bind:value={formRecipient}
-					class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
-					placeholder="User identifier or username"
-				/>
+				<label class="mb-1 block text-sm font-medium text-gray-400">Recipient *</label>
+				{#if formRecipient}
+					<div class="flex items-center gap-2">
+						<div class="flex items-center gap-2 rounded-lg border border-green-700/50 bg-green-900/20 px-3 py-1.5">
+							{#if allUsers.find((u) => u.email === formRecipient && u.avatar_path)}
+								<img
+									src="/storage/{allUsers.find((u) => u.email === formRecipient)?.avatar_path}"
+									alt=""
+									class="h-6 w-6 rounded-full object-cover"
+								/>
+							{/if}
+							<span class="text-sm text-gray-200">
+								{allUsers.find((u) => u.email === formRecipient)?.display_name || formRecipient.split('@')[0]}
+							</span>
+							<span class="text-xs text-gray-500">{formRecipient}</span>
+						</div>
+						<button
+							type="button"
+							onclick={clearRecipient}
+							class="rounded-lg border border-gray-700 px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-800"
+						>
+							Clear
+						</button>
+					</div>
+				{:else}
+					<div class="relative" bind:this={dropdownRef}>
+						<input
+							type="text"
+							bind:value={searchQuery}
+							onclick={() => (dropdownOpen = !dropdownOpen)}
+							class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+							placeholder="Search for a user..."
+						/>
+						{#if dropdownOpen && filteredUsers.length > 0}
+							<div class="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-700 bg-gray-800 shadow-lg">
+								{#each filteredUsers as user (user.id)}
+									<button
+										type="button"
+										onclick={() => selectUser(user)}
+										class="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-gray-700"
+									>
+										{#if user.avatar_path}
+											<img
+												src="/storage/{user.avatar_path}"
+												alt=""
+												class="h-7 w-7 rounded-full object-cover"
+											/>
+										{:else}
+											<div class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-700 text-xs text-gray-400">
+												{user.email[0].toUpperCase()}
+											</div>
+										{/if}
+										<div class="min-w-0 flex-1">
+											<div class="text-sm text-gray-200">
+												{user.display_name || user.email.split('@')[0]}
+											</div>
+											<div class="text-xs text-gray-500">{user.email}</div>
+										</div>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{/if}
 			</div>
 
 			<div>

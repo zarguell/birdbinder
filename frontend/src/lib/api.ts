@@ -184,6 +184,12 @@ export const collection = {
 	},
 };
 
+// Users
+export const users = {
+	list: () => request<any[]>('/users'),
+	getProfile: (email: string) => request<any>(`/users/${encodeURIComponent(email)}`)
+};
+
 // AI Settings
 export const aiSettings = {
 	get: () => request<Record<string, any>>('/settings/ai'),
