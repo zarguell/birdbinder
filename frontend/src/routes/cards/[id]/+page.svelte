@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { cards } from '$lib/api';
+	import { cards, jobs } from '$lib/api';
 
 	let card = $state<any>(null);
 	let loading = $state(true);
 	let error = $state('');
+	let showRegenPanel = $state(false);
+	let regenPromptHint = $state('');
+	let regenerating = $state(false);
+	let regenError = $state('');
+	let regenPollInterval: ReturnType<typeof setInterval> | null = null;
 
 	let id = $derived($page.params.id);
 
@@ -24,6 +29,42 @@
 	$effect(() => {
 		if (id) loadCard();
 	});
+
+	function stopRegenPolling() {
+		if (regenPollInterval) {
+			clearInterval(regenPollInterval);
+			regenPollInterval = null;
+		}
+	}
+
+	async function handleRegenSubmit() {
+		if (regenerating) return;
+		regenerating = true;
+		regenError = '';
+		stopRegenPolling();
+		try {
+			const res = await cards.regenerateArt(card.id, regenPromptHint || undefined);
+			regenPollInterval = setInterval(async () => {
+				try {
+					const job = await jobs.get(res.job_id);
+					if (job.status === 'completed' || job.status === 'failed') {
+						stopRegenPolling();
+						regenerating = false;
+						if (job.status === 'completed') {
+							showRegenPanel = false;
+							regenPromptHint = '';
+							await loadCard();
+						} else {
+							regenError = job.error || 'Generation failed';
+						}
+					}
+				} catch { /* ignore poll errors */ }
+			}, 2000);
+		} catch (err) {
+			regenError = err instanceof Error ? err.message : 'Failed to start regeneration';
+			regenerating = false;
+		}
+	}
 
 	function formatDate(dateStr: string): string {
 		try {
@@ -84,6 +125,55 @@
 			</svg>
 			{card.sighting_id ? 'Back to sighting' : 'Back to sightings'}
 		</a>
+
+		{#if !showRegenPanel}
+			<button
+				onclick={(e) => { e.preventDefault(); showRegenPanel = true; }}
+				disabled={regenerating}
+				class="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+			>
+				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+				</svg>
+				Regenerate Art
+			</button>
+		{:else}
+			<div class="rounded-xl border border-gray-700 bg-gray-900/50 p-4 space-y-3">
+				<h3 class="text-sm font-semibold text-gray-300">Regenerate Art</h3>
+				<textarea
+					bind:value={regenPromptHint}
+					placeholder="e.g., sunset background, more detail on feathers, winter plumage"
+					rows="2"
+					class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 resize-none"
+				></textarea>
+				{#if regenError}
+					<p class="text-xs text-red-400">{regenError}</p>
+				{/if}
+				<div class="flex gap-2">
+					<button
+						onclick={handleRegenSubmit}
+						disabled={regenerating}
+						class="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-500 disabled:opacity-50"
+					>
+						{#if regenerating}
+							<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+							</svg>
+							Generating new art...
+						{:else}
+							Generate
+						{/if}
+					</button>
+					<button
+						onclick={(e) => { e.preventDefault(); showRegenPanel = false; regenError = ''; }}
+						class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800"
+					>
+						Cancel
+					</button>
+				</div>
+			</div>
+		{/if}
 
 		<div class="grid gap-6 lg:grid-cols-2">
 			<div>

@@ -102,3 +102,30 @@ async def delete_card(
     await db.execute(sa_delete(BinderCard).where(BinderCard.card_id == card_id))
     await db.delete(card)
     await db.commit()
+
+
+@router.post("/cards/{card_id}/regenerate-art", status_code=status.HTTP_202_ACCEPTED)
+async def regenerate_card_art(
+    card_id: str,
+    body: dict | None = None,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Regenerate card art for an existing card."""
+    from app.services.card_gen import start_card_art_regeneration
+
+    result = await db.execute(
+        select(Card).where(Card.id == card_id, Card.user_identifier == user)
+    )
+    card = result.scalar_one_or_none()
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    prompt_hint = None
+    style_override = None
+    if body:
+        prompt_hint = body.get("prompt_hint")
+        style_override = body.get("style_override")
+
+    job_id = await start_card_art_regeneration(card_id, db, prompt_hint=prompt_hint, style_override=style_override)
+    return {"job_id": job_id, "status": "pending"}

@@ -83,7 +83,15 @@ export const cards = {
 			method: 'POST',
 		}),
 	delete: (id: string) =>
-		request<void>(`/cards/${id}`, { method: 'DELETE' })
+		request<void>(`/cards/${id}`, { method: 'DELETE' }),
+	regenerateArt: (cardId: string, promptHint?: string, styleOverride?: string) =>
+		request<{ job_id: string; status: string }>(`/cards/${cardId}/regenerate-art`, {
+			method: 'POST',
+			body: JSON.stringify({
+				prompt_hint: promptHint || undefined,
+				style_override: styleOverride || undefined,
+			}),
+		})
 };
 
 // Binders

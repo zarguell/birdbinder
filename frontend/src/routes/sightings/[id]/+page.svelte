@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { sightings, cards, ApiError } from '$lib/api';
+	import { sightings, cards, jobs, ApiError } from '$lib/api';
 	import SpeciesAutocomplete from '$lib/components/SpeciesAutocomplete.svelte';
 	import SpeciesSelector from '$lib/components/SpeciesSelector.svelte';
 
@@ -22,6 +22,7 @@
 	let editDisplayName = $state('');
 	let locationError = $state('');
 	let showSpeciesSelector = $state(false);
+	let regenCardIds = $state<Set<string>>(new Set());
 
 	let id = $derived($page.params.id);
 
@@ -206,6 +207,30 @@ async function handleIdentify() {
 			actionMessageType = 'success';
 		} catch (err) {
 			actionMessage = err instanceof Error ? err.message : 'Failed to override species';
+			actionMessageType = 'error';
+		}
+	}
+
+	async function handleRegenCard(cardId: string) {
+		if (!confirm('Regenerate art for this card?')) return;
+		regenCardIds.add(cardId);
+		try {
+			const res = await cards.regenerateArt(cardId);
+			const pollInterval = setInterval(async () => {
+				try {
+					const job = await jobs.get(res.job_id);
+					if (job.status === 'completed' || job.status === 'failed') {
+						clearInterval(pollInterval);
+						regenCardIds.delete(cardId);
+						if (job.status === 'completed') {
+							await loadSighting();
+						}
+					}
+				} catch { /* ignore poll errors */ }
+			}, 2000);
+		} catch (err) {
+			regenCardIds.delete(cardId);
+			actionMessage = err instanceof Error ? err.message : 'Failed to start regeneration';
 			actionMessageType = 'error';
 		}
 	}
@@ -552,10 +577,20 @@ async function handleIdentify() {
 											{card.rarity_tier}
 										</span>
 									{/if}
+									{#if regenCardIds.has(card.id)}
+										<span class="text-xs text-yellow-400 ml-1">Regenerating...</span>
+									{/if}
 								</div>
-								<svg class="w-4 h-4 text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-								</svg>
+								<button
+									onclick={(e) => { e.preventDefault(); e.stopPropagation(); handleRegenCard(card.id); }}
+									disabled={regenCardIds.has(card.id)}
+									class="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									title="Regenerate art"
+								>
+									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+									</svg>
+								</button>
 							</div>
 						</a>
 					{/each}

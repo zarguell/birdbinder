@@ -218,7 +218,7 @@ IMAGE_TO_ART_PROMPT = """Transform this photo of a {common_name} ({scientific_na
 Keep the bird recognizable and prominent. Replace the background with a clean card-art background suitable for a birding card collection."""
 
 
-def _build_art_prompt(species_info: dict, style: str) -> str:
+def _build_art_prompt(species_info: dict, style: str, prompt_hint: str | None = None) -> str:
     """Build the prompt string, with rarity shimmer for rare+ birds."""
     common_name = species_info.get("common_name") or species_info.get("common") or "Unknown"
     scientific_name = species_info.get("scientific_name") or species_info.get("scientific") or "Unknown"
@@ -236,10 +236,12 @@ def _build_art_prompt(species_info: dict, style: str) -> str:
     if rarity in ("rare", "epic", "legendary"):
         rarity_note = f" This is a {rarity} bird — add a subtle magical shimmer effect."
 
-    return TEXT_TO_ART_PROMPT.format(**template_vars) + rarity_note
+    hint_note = f"\nAdditional context from the user: {prompt_hint}" if prompt_hint else ""
+
+    return TEXT_TO_ART_PROMPT.format(**template_vars) + rarity_note + hint_note
 
 
-def _build_image_to_art_prompt(species_info: dict, style: str) -> str:
+def _build_image_to_art_prompt(species_info: dict, style: str, prompt_hint: str | None = None) -> str:
     """Build the prompt for image-to-image editing."""
     common_name = species_info.get("common_name") or species_info.get("common") or "Unknown"
     scientific_name = species_info.get("scientific_name") or species_info.get("scientific") or "Unknown"
@@ -255,7 +257,9 @@ def _build_image_to_art_prompt(species_info: dict, style: str) -> str:
     if rarity in ("rare", "epic", "legendary"):
         rarity_note = f" This is a {rarity} bird — add a subtle magical shimmer effect."
 
-    return IMAGE_TO_ART_PROMPT.format(**template_vars) + rarity_note
+    hint_note = f"\nAdditional context from the user: {prompt_hint}" if prompt_hint else ""
+
+    return IMAGE_TO_ART_PROMPT.format(**template_vars) + rarity_note + hint_note
 
 
 def _save_b64_image(b64_data: str) -> str:
@@ -347,6 +351,7 @@ async def generate_card_art(
     style_prompt: str | None = None,
     image_model_override: str | None = None,
     style_override: str | None = None,
+    prompt_hint: str | None = None,
 ) -> str:
     """Generate stylized card art for a sighting.
 
@@ -368,7 +373,7 @@ async def generate_card_art(
 
         if has_source_image:
             # Try image-to-image first (better likeness preservation)
-            prompt = _build_image_to_art_prompt(species_info, style)
+            prompt = _build_image_to_art_prompt(species_info, style, prompt_hint)
             try:
                 logger.info("Card art: trying image-to-image with model=%s", image_model)
                 b64 = await _generate_image_to_image(image_path, prompt, image_model)
@@ -378,7 +383,7 @@ async def generate_card_art(
                 logger.warning("Card art: image-to-image failed (%s), falling back to text-to-image", e)
 
         # Text-to-image (no photo or image-to-image failed)
-        prompt = _build_art_prompt(species_info, style)
+        prompt = _build_art_prompt(species_info, style, prompt_hint)
         logger.info("Card art: text-to-image with model=%s", image_model)
         b64 = await _generate_text_to_image(prompt, image_model)
         logger.info("Card art: text-to-image succeeded")

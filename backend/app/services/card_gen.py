@@ -181,3 +181,101 @@ async def start_card_generation(sighting_id: str, db) -> str:
     generate_card_task(job.id, sighting_id)
 
     return job.id
+
+
+def _run_card_art_regeneration(job_id: str, card_id: str, prompt_hint: str | None = None, style_override: str | None = None):
+    """Huey task: regenerate card art for an existing card."""
+    import asyncio
+    from app.models.card import Card
+    from app.models.enums import JobStatus
+    from app.models.job import Job
+    from app.models.sighting import Sighting
+    from app.storage import get_file_path
+    from app.models.app_setting import AppSetting
+
+    with Session(_sync_engine) as session:
+        try:
+            job = session.get(Job, job_id)
+            job.status = JobStatus.running.value
+            session.commit()
+
+            card = session.get(Card, card_id)
+            if not card:
+                raise ValueError(f"Card {card_id} not found")
+
+            sighting = session.get(Sighting, card.sighting_id) if card.sighting_id else None
+            if not sighting:
+                raise ValueError(f"Sighting {card.sighting_id} not found")
+
+            image_path = ""
+            if sighting.photo_path:
+                image_path = str(get_file_path(sighting.photo_path))
+
+            db_image_model = session.query(AppSetting).filter(AppSetting.key == "ai_image_model").first()
+            db_style = session.query(AppSetting).filter(AppSetting.key == "card_style_name").first()
+            image_model_override = db_image_model.value if db_image_model else None
+            effective_style = style_override if style_override else db_style.value if db_style else None
+
+            species_info = {
+                "common_name": card.species_common or "Unknown",
+                "scientific_name": card.species_scientific or "Unknown",
+                "pose_variant": card.pose_variant or "perching",
+                "rarity_tier": card.rarity_tier or "common",
+            }
+
+            from app.services.ai import generate_card_art
+            art_path = asyncio.run(
+                generate_card_art(
+                    image_path=image_path,
+                    species_info=species_info,
+                    prompt_hint=prompt_hint,
+                    style_override=effective_style,
+                )
+            )
+            if art_path:
+                card.card_art_url = f"/storage/{art_path}"
+                session.commit()
+
+            job.status = JobStatus.completed.value
+            job.completed_at = datetime.now(timezone.utc)
+            job.result = {"card_id": card.id}
+            session.commit()
+        except Exception as e:
+            job = session.get(Job, job_id)
+            if not job:
+                logger.error("Job %s not found during error handling", job_id)
+                return
+            job.status = JobStatus.failed.value
+            job.error = str(e)
+            job.completed_at = datetime.now(timezone.utc)
+            session.commit()
+
+
+@huey.task()
+def regenerate_card_art_task(job_id: str, card_id: str, prompt_hint: str | None = None, style_override: str | None = None):
+    _run_card_art_regeneration(job_id, card_id, prompt_hint, style_override)
+
+
+async def start_card_art_regeneration(card_id: str, db, prompt_hint: str | None = None, style_override: str | None = None) -> str:
+    """Start card art regeneration for a card. Returns job_id."""
+    from app.models.enums import JobStatus, JobType
+    from app.models.job import Job
+    from app.models.card import Card
+
+    card = await db.get(Card, card_id)
+    if not card:
+        raise ValueError(f"Card {card_id} not found")
+
+    job = Job(
+        id=str(uuid.uuid4()),
+        type=JobType.regenerate_art.value,
+        sighting_id=card.sighting_id,
+        status=JobStatus.pending.value,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    regenerate_card_art_task(job.id, card_id, prompt_hint, style_override)
+
+    return job.id
