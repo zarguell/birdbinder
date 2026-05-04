@@ -8,6 +8,12 @@
 	let error = $state('');
 	let sightingId: string | null = $state(null);
 
+	// EXIF + location state
+	let exifLat: number | null = $state(null);
+	let exifLon: number | null = $state(null);
+	let locationDisplayName: string = $state('');
+	let showLocationPrompt: boolean = $state(false);
+
 	function handleFileSelect(e: Event) {
 		const target = e.target as HTMLInputElement;
 		const selected = target.files?.[0];
@@ -17,12 +23,20 @@
 		target.value = '';
 	}
 
-	function setFile(f: File) {
+	async function setFile(f: File) {
 		file = f;
 		error = '';
 		sightingId = null;
+		locationDisplayName = '';
+		showLocationPrompt = false;
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
 		previewUrl = URL.createObjectURL(f);
+
+		// Extract EXIF to check for GPS
+		const exif = await readExifFromFile(f);
+		exifLat = exif.lat;
+		exifLon = exif.lon;
+		showLocationPrompt = exifLat === null && exifLon === null;
 	}
 
 	function formatSize(bytes: number): string {
@@ -96,23 +110,23 @@
 									}
 								}
 
-				if (tag === 0x0002 || tag === 0x0004) {
-						const valueOffset = tiffOffset + view.getUint32(entryOffset + 8, littleEndian);
-						if (valueOffset + 24 <= view.byteLength) {
-							const toDecimal = (off: number): number => {
-								const deg = view.getUint32(off, littleEndian);
-								const min = view.getUint32(off + 4, littleEndian);
-								const sec = view.getUint32(off + 8, littleEndian) / view.getUint32(off + 12, littleEndian);
-								return deg + min / 60 + sec / 3600;
-							};
-							const gpsLat = toDecimal(valueOffset);
-							const gpsLon = toDecimal(valueOffset + 12);
-							const latRef = String.fromCharCode(view.getUint8(valueOffset + 20));
-							const lonRef = String.fromCharCode(view.getUint8(valueOffset + 22));
-							lat = latRef === 'S' ? -gpsLat : gpsLat;
-							lon = lonRef === 'W' ? -gpsLon : gpsLon;
-						}
-					}
+								if (tag === 0x0002 || tag === 0x0004) {
+									const valueOffset = tiffOffset + view.getUint32(entryOffset + 8, littleEndian);
+									if (valueOffset + 24 <= view.byteLength) {
+										const toDecimal = (off: number): number => {
+											const deg = view.getUint32(off, littleEndian);
+											const min = view.getUint32(off + 4, littleEndian);
+											const sec = view.getUint32(off + 8, littleEndian) / view.getUint32(off + 12, littleEndian);
+											return deg + min / 60 + sec / 3600;
+										};
+										const gpsLat = toDecimal(valueOffset);
+										const gpsLon = toDecimal(valueOffset + 12);
+										const latRef = String.fromCharCode(view.getUint8(valueOffset + 20));
+										const lonRef = String.fromCharCode(view.getUint8(valueOffset + 22));
+										lat = latRef === 'S' ? -gpsLat : gpsLat;
+										lon = lonRef === 'W' ? -gpsLon : gpsLon;
+									}
+								}
 							}
 						}
 						break;
@@ -133,9 +147,8 @@
 		error = '';
 
 		try {
-			// Try to extract EXIF before upload (belt-and-suspenders with backend extraction)
 			const exif = await readExifFromFile(file);
-			const result = await sightings.upload(file, exif);
+			const result = await sightings.upload(file, exif, locationDisplayName || undefined);
 			sightingId = result.id ?? result.sighting_id ?? null;
 			if (sightingId) {
 				goto(`/sightings/${sightingId}`);
@@ -217,6 +230,8 @@
 						onclick={() => {
 							file = null;
 							previewUrl = '';
+							showLocationPrompt = false;
+							locationDisplayName = '';
 						}}
 						class="text-xs text-red-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-400/10 transition-colors shrink-0"
 					>
@@ -224,6 +239,44 @@
 					</button>
 				</div>
 			</div>
+
+			<!-- Location Prompt (shown when no EXIF GPS) -->
+			{#if showLocationPrompt}
+				<div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+					<div class="flex items-start gap-2">
+						<svg class="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+						</svg>
+						<div class="min-w-0">
+							<p class="text-sm font-medium text-amber-300">No location found in photo</p>
+							<p class="text-xs text-gray-400 mt-0.5">Adding a location helps the AI identify the bird more accurately (e.g. "Central Park, New York").</p>
+						</div>
+					</div>
+					<input
+						type="text"
+						bind:value={locationDisplayName}
+						placeholder="e.g. Prospect Park, Brooklyn, NY"
+						class="w-full rounded-lg border border-gray-700 bg-gray-800/80 px-3 py-2.5 text-sm placeholder-gray-500 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500/30"
+					/>
+					<div class="flex gap-2">
+						<button
+							onclick={() => { showLocationPrompt = false; }}
+							class="flex-1 text-xs text-gray-400 hover:text-gray-300 font-medium py-2 rounded-lg hover:bg-gray-800 transition-colors"
+						>
+							Skip
+						</button>
+					</div>
+				</div>
+			{:else if exifLat !== null && exifLon !== null}
+				<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+					<svg class="w-4 h-4 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+					</svg>
+					<span class="text-xs text-green-400">GPS location found in photo</span>
+				</div>
+			{/if}
 
 			<!-- Upload Button -->
 			<button

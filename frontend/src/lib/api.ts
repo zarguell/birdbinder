@@ -37,12 +37,13 @@ export const sightings = {
 	},
 	get: (id: string) => request<any>(`/sightings/${id}`),
 	getJob: (id: string) => request<{ job: any | null }>(`/sightings/${id}/job`),
-	upload: (file: File, exif?: { datetime: string | null; lat: number | null; lon: number | null }) => {
+	upload: (file: File, exif?: { datetime: string | null; lat: number | null; lon: number | null }, locationDisplayName?: string) => {
 		const form = new FormData();
 		form.append('file', file);
 		if (exif?.datetime) form.append('exif_datetime', exif.datetime);
 		if (exif?.lat != null) form.append('exif_lat', String(exif.lat));
 		if (exif?.lon != null) form.append('exif_lon', String(exif.lon));
+		if (locationDisplayName) form.append('location_display_name', locationDisplayName);
 		return fetch(`${API_BASE}/sightings`, { method: 'POST', body: form }).then(async (res) => {
 			if (!res.ok) throw new ApiError(res.status, await res.text());
 			return res.json();
@@ -50,6 +51,8 @@ export const sightings = {
 	},
 	delete: (id: string) =>
 		request<void>(`/sightings/${id}`, { method: 'DELETE' }),
+	update: (id: string, data: Record<string, unknown>) =>
+		request<any>(`/sightings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 	overrideSpecies: (id: string, speciesCode: string, speciesCommon: string) =>
 		request<any>(`/sightings/${id}`, {
 			method: 'PATCH',

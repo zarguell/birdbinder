@@ -63,10 +63,36 @@
         return `${Math.floor(diff / 86400)}d ago`;
     }
 
+    function userDisplayName(activity: any): string {
+        return activity.display_name || activity.user_identifier;
+    }
+
+    function userInitials(activity: any): string {
+        const name = userDisplayName(activity);
+        if (name.includes('@')) return name.split('@')[0].slice(0, 2).toUpperCase();
+        return name.slice(0, 2).toUpperCase();
+    }
+
+    function commentUserDisplayName(comment: any): string {
+        return comment.display_name || comment.user_identifier;
+    }
+
+    function commentUserInitials(comment: any): string {
+        const name = commentUserDisplayName(comment);
+        if (name.includes('@')) return name.split('@')[0].slice(0, 2).toUpperCase();
+        return name.slice(0, 2).toUpperCase();
+    }
+
     const activityIcons: Record<string, string> = {
         sighting: '📸',
         card: '🃏',
         set_completion: '🏆',
+    };
+
+    const activityLabels: Record<string, string> = {
+        sighting: 'Sighting',
+        card: 'Card',
+        set_completion: 'Set',
     };
 
     $effect(() => { loadFeed(); });
@@ -100,16 +126,25 @@
                 <div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
                     <div class="flex items-start justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-green-900/30 text-green-400 text-sm font-bold">
-                                {activity.user_identifier?.slice(-2).toUpperCase() || '??'}
-                            </div>
+                            <a
+                                href="/users/{activity.user_identifier}"
+                                class="flex h-10 w-10 items-center justify-center rounded-full bg-green-900/30 text-green-400 text-sm font-bold transition-colors hover:bg-green-900/50"
+                                title="{activity.user_identifier}"
+                            >
+                                {userInitials(activity)}
+                            </a>
                             <div>
-                                <p class="text-sm font-medium text-gray-200">{activity.user_identifier}</p>
+                                <a
+                                    href="/users/{activity.user_identifier}"
+                                    class="text-sm font-medium text-gray-200 hover:text-green-400 transition-colors"
+                                >
+                                    {userDisplayName(activity)}
+                                </a>
                                 <p class="text-xs text-gray-500">{timeAgo(activity.created_at)}</p>
                             </div>
                         </div>
                         <span class="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
-                            {activityIcons[activity.activity_type] || '📝'} {activity.activity_type}
+                            {activityIcons[activity.activity_type] || '📝'} {activityLabels[activity.activity_type] || activity.activity_type}
                         </span>
                     </div>
                     <p class="mt-3 text-gray-300">{activity.description}</p>
@@ -141,9 +176,15 @@
                     {#if activity.comments?.length > 0}
                         <div class="mt-3 space-y-2 pl-2 border-l-2 border-gray-800">
                             {#each activity.comments as comment}
-                                <div class="text-sm">
-                                    <span class="font-medium text-gray-300">{comment.user_identifier}</span>
-                                    <span class="ml-2 text-gray-400">{comment.content}</span>
+                                <div class="text-sm flex items-start gap-2">
+                                    <a
+                                        href="/users/{comment.user_identifier}"
+                                        class="font-medium text-gray-300 hover:text-green-400 transition-colors shrink-0"
+                                        title="{comment.user_identifier}"
+                                    >
+                                        {commentUserDisplayName(comment)}
+                                    </a>
+                                    <span class="text-gray-400">{comment.content}</span>
                                 </div>
                             {/each}
                         </div>

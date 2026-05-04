@@ -40,7 +40,18 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             db_prompt = session.query(AppSetting).filter(AppSetting.key == "birdbinder_id_prompt").first()
             model_override = db_model.value if db_model else None
             prompt = (db_prompt.value if db_prompt else None) or settings.birdbinder_id_prompt or DEFAULT_ID_PROMPT
-            result_text = asyncio.run(call_vision_model(image_path, prompt, model_override=model_override))
+
+            # Inject location context into prompt if available
+            sighting = session.get(Sighting, sighting_id)
+            location_context = ""
+            if sighting.location_display_name:
+                location_context = f"\n\nLocation context: This photo was taken in {sighting.location_display_name}. Use this to narrow down likely species and subspecies."
+            elif sighting.exif_lat is not None and sighting.exif_lon is not None:
+                location_context = f"\n\nLocation context: GPS coordinates {sighting.exif_lat:.4f}, {sighting.exif_lon:.4f}. Use this to narrow down likely species and subspecies."
+
+            effective_prompt = prompt + location_context if location_context else prompt
+
+            result_text = asyncio.run(call_vision_model(image_path, effective_prompt, model_override=model_override))
             logger.info("Job %s: AI response received (%d chars): %s", job_id, len(result_text), result_text[:500])
 
             # Store raw response on job (visible to user via API)
@@ -98,7 +109,6 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             )
 
             # Update sighting with identification results
-            sighting = session.get(Sighting, sighting_id)
             sighting.status = "identified"
             sighting.manual_species_override = False
             sighting.species_common = result.get("common_name", "Unknown")
