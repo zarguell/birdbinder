@@ -14,6 +14,10 @@ echo "Running database migrations..."
 PYTHONPATH=/app alembic upgrade head
 echo "Migrations complete."
 
+# Safety net: add any model columns missing from the DB (nullable only)
+echo "Checking schema alignment..."
+PYTHONPATH=/app python -c "from app.ensure_schema import ensure_columns; from app.config import settings; n = ensure_columns(settings.database_url); print(f'Added {n} missing column(s).')" || true
+
 # Start uvicorn and huey consumer in the background
 echo "Starting BirdBinder..."
 
