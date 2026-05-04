@@ -49,7 +49,20 @@ Return a JSON object with exactly these fields:
 If you cannot identify the bird, set confidence to 0 and put "Unknown" for names.
 ```
 
-**User message:** `"Identify this bird:"` + base64 image
+**User message:** `\"Identify this bird:\"` + base64 image
+
+**Context injection:** After the system prompt is resolved, the sighting's location and date are appended to help the model narrow down species. This is done automatically — no prompt customization needed.
+
+````
+Location/date context: This photo was taken in Central Park, New York. Use this to narrow down likely species and subspecies. The photo was taken on May 04, 2026. Consider seasonal plumage, migration status, and expected species for that time of year.
+````
+
+Sources (priority order):
+1. `location_display_name` — user-provided (via upload prompt or sighting edit)
+2. GPS coordinates (`exif_lat`/`exif_lon`) — from EXIF or browser fallback
+3. `exif_datetime` — photo timestamp (always injected if available)
+
+If none are available, no context block is appended (same as before).
 
 **Enforced parameters:**
 - `response_format: {"type": "json_object"}` — forces structured output
