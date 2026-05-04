@@ -57,6 +57,8 @@
 
 	function activityIcon(type: string): string {
 		switch (type) {
+			case 'sighting': return '📸';
+			case 'card': return '🃏';
 			case 'identification': return '🎯';
 			case 'card_generation': return '🃏';
 			case 'binder_add': return '📋';
@@ -65,7 +67,12 @@
 	}
 
 	function activityDescription(activity: any): string {
-		switch (activity.type) {
+		const t = activity.type || activity.activity_type;
+		switch (t) {
+			case 'sighting':
+				return activity.description || 'Spotted a bird';
+			case 'card':
+				return activity.description || 'Unlocked a card';
 			case 'identification':
 				return `Identified ${activity.species_common || activity.species_code || 'a bird'}`;
 			case 'card_generation':
@@ -73,7 +80,7 @@
 			case 'binder_add':
 				return `Added card to binder`;
 			default:
-				return activity.type.replace('_', ' ');
+				return activity.description || t?.replace('_', ' ') || 'Activity';
 		}
 	}
 
@@ -166,7 +173,7 @@
 					<div class="space-y-2">
 						{#each profile.recent_activity as activity}
 							<div class="flex items-center gap-3 p-3 bg-gray-900 rounded-xl border border-gray-800">
-								<span class="text-xl">{activityIcon(activity.type)}</span>
+								<span class="text-xl">{activityIcon(activity.type || activity.activity_type)}</span>
 								<div class="flex-1 min-w-0">
 									<p class="text-sm text-gray-200">{activityDescription(activity)}</p>
 								</div>
