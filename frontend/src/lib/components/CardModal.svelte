@@ -13,12 +13,12 @@
 	let deleteTimer: ReturnType<typeof setTimeout> | null = null;
 	let deleting = $state(false);
 
-	const rarityConfig: Record<string, { bg: string; text: string; label: string }> = {
-		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common' },
-		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon' },
-		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare' },
-		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic' },
-		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary' }
+	const rarityConfig: Record<string, { bg: string; text: string; label: string; border: string; glow: string }> = {
+		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common', border: 'border-gray-500/50', glow: '' },
+		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon', border: 'border-green-500/60', glow: 'shadow-green-500/10' },
+		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare', border: 'border-blue-400/60', glow: 'shadow-blue-500/15' },
+		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic', border: 'border-purple-400/60', glow: 'shadow-purple-500/15' },
+		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary', border: 'border-amber-400/70', glow: 'shadow-amber-400/20' }
 	};
 
 	function getRarity(tier: string) {
@@ -149,22 +149,22 @@
 			{#if !flipped}
 				<!-- FRONT VIEW -->
 				<div class="flex flex-col sm:flex-row">
-					<!-- Card Art -->
-					<div class="relative aspect-[3/4] w-full shrink-0 overflow-hidden bg-gray-800 sm:w-48 sm:aspect-auto sm:min-h-64">
-						{#if card.card_art_url}
-							<img
-								src={card.card_art_url}
-								alt={card.species_common ?? 'Card'}
-								class="h-full w-full object-cover"
-							/>
-						{:else}
-							<div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-800 via-gray-750 to-gray-900">
-								<svg class="h-16 w-16 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-								</svg>
-							</div>
-						{/if}
-					</div>
+				<!-- Card Art -->
+				<div class="holo-shimmer relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border-2 {rarity.border} {rarity.glow} shadow-lg bg-gray-800 sm:w-48 sm:aspect-auto sm:min-h-64">
+					{#if card.card_art_url}
+						<img
+							src={card.card_art_url}
+							alt={card.species_common ?? 'Card'}
+							class="h-full w-full object-cover"
+						/>
+					{:else}
+						<div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-800 via-gray-750 to-gray-900">
+							<svg class="h-16 w-16 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+							</svg>
+						</div>
+					{/if}
+				</div>
 
 					<!-- Card Details -->
 					<div class="flex-1 space-y-4 p-5">
@@ -215,6 +215,12 @@
 								<div class="flex justify-between">
 									<dt class="text-gray-500">Generated</dt>
 									<dd class="text-gray-200">{formatDate(card.generated_at)}</dd>
+								</div>
+							{/if}
+							{#if card.art_model}
+								<div class="flex justify-between">
+									<dt class="text-gray-500">Art Model</dt>
+									<dd class="text-gray-400 font-mono text-xs">{card.art_model}</dd>
 								</div>
 							{/if}
 							{#if card.set_ids?.length}
@@ -423,3 +429,29 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.holo-shimmer::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		pointer-events: none;
+		background: linear-gradient(
+			115deg,
+			transparent 20%,
+			rgba(255, 255, 255, 0.06) 36%,
+			rgba(255, 255, 255, 0.12) 40%,
+			rgba(255, 255, 255, 0.06) 44%,
+			transparent 60%
+		);
+		background-size: 200% 100%;
+		animation: holo-sweep 3s ease-in-out infinite;
+		mix-blend-mode: overlay;
+	}
+
+	@keyframes holo-sweep {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+</style>

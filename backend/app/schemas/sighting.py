@@ -36,6 +36,7 @@ class SightingInfo(BaseModel):
     pose_variant: str | None = None
     id_confidence: float | None = None
     id_method: str | None = None
+    id_model: str | None = None
 
     model_config = {"from_attributes": True}
 

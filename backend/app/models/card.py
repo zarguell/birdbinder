@@ -31,6 +31,7 @@ class Card(Base):
     card_art_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     id_method: Mapped[str] = mapped_column(String(20), default="ai")
     id_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    art_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     duplicate_count: Mapped[int] = mapped_column(Integer, default=1)
     tradeable: Mapped[bool] = mapped_column(Boolean, default=True)
     generated_at: Mapped[datetime] = mapped_column(

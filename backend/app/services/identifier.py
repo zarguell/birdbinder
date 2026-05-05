@@ -123,6 +123,7 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             sighting.pose_variant = pose
             sighting.id_confidence = confidence
             sighting.id_method = "ai"
+            sighting.id_model = model_override or settings.ai_model
 
             # Reverse lookup species_code from common_name or scientific_name
             def _load_birds_data():

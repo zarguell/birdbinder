@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 _sync_db_url = settings.database_url.replace("sqlite+aiosqlite", "sqlite")
 _sync_engine = create_engine(_sync_db_url)
 
-CARD_ART_PROMPT_TEMPLATE = """Create a collectible trading card illustration of a {common_name} ({scientific_name}) in a {pose} pose.
-The style should be {style}. The illustration should be suitable for a birding card collection.
-The image should show the bird prominently with a clean background suitable for card art."""
+CARD_ART_PROMPT_TEMPLATE = """Create an illustration of a {common_name} ({scientific_name}) in a {pose} pose.
+The style should be {style}. The bird should be prominently centered with a clean, uncluttered background.
+Do NOT add any text, borders, frames, or card-like elements. Only the bird and its environment."""
 
 
 def _run_card_generation(job_id: str, sighting_id: str):
@@ -61,6 +61,7 @@ def _run_card_generation(job_id: str, sighting_id: str):
 
             # Determine card art path
             card_art_url = None
+            resolved_art_model = None
             if settings.ai_api_key:
                 try:
                     from app.services.ai import generate_card_art
@@ -75,6 +76,7 @@ def _run_card_generation(job_id: str, sighting_id: str):
                     db_style = session.query(AppSetting).filter(AppSetting.key == "card_style_name").first()
                     image_model_override = db_image_model.value if db_image_model else None
                     style_override = db_style.value if db_style else None
+                    resolved_art_model = image_model_override or settings.ai_image_model or settings.ai_model
 
                     species_info = {
                         "common_name": sighting.species_common or "Unknown",
@@ -111,6 +113,7 @@ def _run_card_generation(job_id: str, sighting_id: str):
                 pose_variant=sighting.pose_variant or "other",
                 rarity_tier=rarity_tier,
                 card_art_url=card_art_url,
+                art_model=resolved_art_model,
                 id_method=sighting.id_method or "ai",
                 id_confidence=sighting.id_confidence,
             )
@@ -215,6 +218,7 @@ def _run_card_art_regeneration(job_id: str, card_id: str, prompt_hint: str | Non
             db_style = session.query(AppSetting).filter(AppSetting.key == "card_style_name").first()
             image_model_override = db_image_model.value if db_image_model else None
             effective_style = style_override if style_override else db_style.value if db_style else None
+            resolved_art_model = image_model_override or settings.ai_image_model or settings.ai_model
 
             species_info = {
                 "common_name": card.species_common or "Unknown",
@@ -235,6 +239,7 @@ def _run_card_art_regeneration(job_id: str, card_id: str, prompt_hint: str | Non
             )
             if art_path:
                 card.card_art_url = f"/storage/{art_path}"
+                card.art_model = resolved_art_model
                 session.commit()
 
             job.status = JobStatus.completed.value

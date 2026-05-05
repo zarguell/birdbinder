@@ -89,7 +89,7 @@ If none are available, no context block is appended (same as before).
 
 ## 2. Image-to-Image Art Generation
 
-**Purpose:** Transform the user's original bird photo into a stylized collectible card illustration while preserving the bird's likeness.
+**Purpose:** Transform the user's original bird photo into a stylized illustration while preserving the bird's likeness. The app UI handles card frames, borders, and holographic effects — the AI should only generate clean artwork.
 
 **Pipeline:**
 1. Original photo is sent as-is (not resized/compressed like classification)
@@ -98,10 +98,12 @@ If none are available, no context block is appended (same as before).
 
 **Prompt template (`IMAGE_TO_ART_PROMPT`):**
 ```
-Transform this photo of a {common_name} ({scientific_name}) into a collectible
-trading card illustration in {style} style.
-Keep the bird recognizable and prominent. Replace the background with a clean
-card-art background suitable for a birding card collection.
+Transform this photo of a {common_name} ({scientific_name}) into a {style}
+style illustration.
+Keep the bird recognizable and prominent. Replace the background with a clean,
+uncluttered environment.
+Do NOT add any text, borders, frames, or card-like elements.
+Only the bird and its environment.
 ```
 
 **Multipart fields:** `image` (file), `prompt`, `model`, `n=1`, `size=1024x1024`, `response_format=b64_json`
@@ -121,7 +123,7 @@ This is a {rarity} bird — add a subtle magical shimmer effect.
 
 ## 3. Text-to-Image Art Generation
 
-**Purpose:** Generate card art from scratch when no source photo is available, or as a fallback when image-to-image fails.
+**Purpose:** Generate card art from scratch when no source photo is available, or as a fallback when image-to-image fails. The app UI handles card frames, borders, and holographic effects — the AI should only generate clean artwork.
 
 **Pipeline:**
 1. Prompt is built from species metadata (including pose) + art style
@@ -129,11 +131,12 @@ This is a {rarity} bird — add a subtle magical shimmer effect.
 
 **Prompt template (`TEXT_TO_ART_PROMPT`):**
 ```
-Create a collectible trading card illustration of a {common_name} ({scientific_name})
+Create an illustration of a {common_name} ({scientific_name})
 in a {pose} pose.
-The style should be {style}. The illustration should be suitable for a birding
-card collection.
-The image should show the bird prominently with a clean background suitable for card art.
+The style should be {style}. The bird should be prominently centered with
+a clean, uncluttered background.
+Do NOT add any text, borders, frames, or card-like elements.
+Only the bird and its environment.
 ```
 
 **Key difference from image-to-image:** This template includes `{pose}` (from `pose_variant` — perching, flying, swimming, etc.) since there's no source photo to preserve the pose from. It also explicitly asks the model to "create" rather than "transform."

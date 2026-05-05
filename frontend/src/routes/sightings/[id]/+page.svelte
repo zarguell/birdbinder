@@ -323,6 +323,11 @@ async function handleIdentify() {
 								{sighting.id_confidence}% confidence
 							</span>
 						{/if}
+						{#if sighting.id_model}
+							<span class="ml-2 text-xs text-gray-600 font-mono">
+								{sighting.id_model}
+							</span>
+						{/if}
 					</div>
 				</div>
 
@@ -546,10 +551,10 @@ async function handleIdentify() {
 				<h2 class="text-lg font-semibold">Cards</h2>
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{#each sighting.cards as card}
-						<a
-							href="/cards/{card.id}"
-							class="rounded-xl border border-gray-800 bg-gray-900/50 overflow-hidden transition-colors hover:border-gray-700 hover:bg-gray-900"
-						>
+					<a
+						href="/cards/{card.id}"
+						class="holo-shimmer rounded-xl border-2 border-gray-700/50 bg-gray-900/50 overflow-hidden transition-all hover:border-gray-500 hover:bg-gray-900 hover:shadow-lg hover:shadow-black/20"
+					>
 							{#if card.card_art_url}
 								<img
 									src={card.card_art_url}
@@ -599,3 +604,29 @@ async function handleIdentify() {
 		{/if}
 	{/if}
 </div>
+
+<style>
+	.holo-shimmer::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		pointer-events: none;
+		background: linear-gradient(
+			115deg,
+			transparent 20%,
+			rgba(255, 255, 255, 0.06) 36%,
+			rgba(255, 255, 255, 0.12) 40%,
+			rgba(255, 255, 255, 0.06) 44%,
+			transparent 60%
+		);
+		background-size: 200% 100%;
+		animation: holo-sweep 3s ease-in-out infinite;
+		mix-blend-mode: overlay;
+	}
+
+	@keyframes holo-sweep {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+</style>

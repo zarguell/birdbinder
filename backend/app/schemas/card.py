@@ -19,6 +19,7 @@ class CardRead(BaseModel):
     card_art_url: str | None
     id_method: str
     id_confidence: float | None
+    art_model: str | None = None
     duplicate_count: int
     tradeable: bool
     generated_at: datetime | None

@@ -178,11 +178,13 @@
 		<div class="grid gap-6 lg:grid-cols-2">
 			<div>
 				{#if card.card_art_url}
-					<img
-						src={card.card_art_url}
-						alt={card.species_common ?? 'Card'}
-						class="w-full rounded-xl border border-gray-800 bg-gray-900 object-contain"
-					/>
+					<div class="holo-shimmer relative overflow-hidden rounded-xl border-2 shadow-lg bg-gray-900">
+						<img
+							src={card.card_art_url}
+							alt={card.species_common ?? 'Card'}
+							class="w-full object-contain"
+						/>
+					</div>
 				{:else}
 					<div class="flex aspect-[2.5/3.5] w-full items-center justify-center rounded-xl border border-gray-800 bg-gray-900">
 						<svg class="h-12 w-12 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
@@ -220,12 +222,18 @@
 				<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-2">
 					<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Details</h2>
 					<dl class="space-y-2 text-sm">
-						{#if card.generated_at}
-							<div class="flex justify-between">
-								<dt class="text-gray-500">Generated</dt>
-								<dd class="text-gray-200">{formatDate(card.generated_at)}</dd>
-							</div>
-						{/if}
+					{#if card.generated_at}
+						<div class="flex justify-between">
+							<dt class="text-gray-500">Generated</dt>
+							<dd class="text-gray-200">{formatDate(card.generated_at)}</dd>
+						</div>
+					{/if}
+					{#if card.art_model}
+						<div class="flex justify-between">
+							<dt class="text-gray-500">Art Model</dt>
+							<dd class="text-gray-400 font-mono text-xs">{card.art_model}</dd>
+						</div>
+					{/if}
 						{#if card.sighting_id}
 							<div class="flex justify-between">
 								<dt class="text-gray-500">Sighting</dt>
@@ -244,3 +252,29 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.holo-shimmer::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		pointer-events: none;
+		background: linear-gradient(
+			115deg,
+			transparent 20%,
+			rgba(255, 255, 255, 0.06) 36%,
+			rgba(255, 255, 255, 0.12) 40%,
+			rgba(255, 255, 255, 0.06) 44%,
+			transparent 60%
+		);
+		background-size: 200% 100%;
+		animation: holo-sweep 3s ease-in-out infinite;
+		mix-blend-mode: overlay;
+	}
+
+	@keyframes holo-sweep {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+</style>
