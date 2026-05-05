@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { aiSettings, auth, collection, profile } from '$lib/api';
+    import { aiSettings, auth, collection, profile, getVersion } from '$lib/api';
 
     let settings = $state<Record<string, any>>({});
     let originals = $state<Record<string, string>>({});
@@ -7,12 +7,22 @@
     let saving = $state(false);
     let message = $state<{ type: 'success' | 'error'; text: string } | null>(null);
     let authInfo = $state<{ ai_base_url: string; ai_enabled: boolean } | null>(null);
+    let commitSha = $state<string | null>(null);
 
     // Region picker state
     let regions = $state<any[]>([]);
     let currentRegion = $state<string | null>(null);
     let regionLoading = $state(false);
     let regionMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    async function loadVersion() {
+        try {
+            const data = await getVersion();
+            commitSha = data.commit;
+        } catch {
+            // non-critical
+        }
+    }
 
     async function loadSettings() {
         loading = true;
@@ -107,6 +117,7 @@
         loadSettings();
         loadAuthSettings();
         loadRegion();
+        loadVersion();
     });
 </script>
 
@@ -263,6 +274,24 @@
                     <p class="mt-2 text-xs text-gray-500">Saving...</p>
                 {/if}
             </div>
+        </div>
+    {/if}
+
+    <!-- Commit hash footer -->
+    {#if commitSha}
+        <div class="mt-10 pb-6 text-center text-xs text-gray-600">
+            {#if commitSha !== 'dev' && commitSha !== 'unknown'}
+                <a
+                    href="https://github.com/zarguell/birdbinder/commit/{commitSha}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="hover:text-gray-400 transition-colors"
+                >
+                    {commitSha.slice(0, 7)}
+                </a>
+            {:else}
+                {commitSha}
+            {/if}
         </div>
     {/if}
 </div>

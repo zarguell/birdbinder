@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./data/birdbinder.db"
     storage_path: str = "./storage"
     ebird_api_key: Optional[str] = None
+    git_sha: str = "dev"
 
     @property
     def parsed_api_keys(self) -> list[str]:

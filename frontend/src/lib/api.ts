@@ -208,6 +208,10 @@ export const aiSettings = {
 		request<any>('/settings/ai', { method: 'PATCH', body: JSON.stringify(settings) }),
 };
 
+// Version
+export const getVersion = () =>
+	request<{ commit: string }>('/version');
+
 // Feed (activity)
 export const feed = {
 	list: (params?: { limit?: number; offset?: number }) => {

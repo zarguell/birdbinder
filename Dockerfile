@@ -13,6 +13,8 @@ RUN npm run build
 # ── Stage 2: Python backend ────────────────────────────────────────────
 FROM python:3.13-slim
 
+ARG GIT_SHA=dev
+
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -43,6 +45,8 @@ RUN chmod +x entrypoint.sh
 RUN mkdir -p /app/data /app/storage && \
     chown -R appuser:appuser /app/data /app/storage && \
     chmod 777 /app/data /app/storage
+
+ENV GIT_SHA=${GIT_SHA}
 
 # Don't set USER here — entrypoint runs as root to fix volume permissions,
 # then drops to appuser via exec-su
