@@ -260,7 +260,7 @@ with op.batch_alter_table('mytable', recreate='batch_alter_table') as batch_op:
     )
 ```
 
-The `recreate` parameter tells Alembic to create a new table, copy data, swap, and drop — which naturally picks up the new FK definition from the model.
+`recreate='always'` tells Alembic to create a new table, copy data, swap, and drop — which naturally picks up the new FK definition from the model.
 
 ### 9. Test API Key Is Hardcoded
 

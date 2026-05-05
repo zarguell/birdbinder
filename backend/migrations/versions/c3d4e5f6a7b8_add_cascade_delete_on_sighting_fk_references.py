@@ -19,13 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # SQLite doesn't name FK constraints, so batch mode can't drop by name.
     # Use recreate to rebuild the table with the new ondelete clause.
-    with op.batch_alter_table('cards', recreate='batch_alter_table') as batch_op:
+    with op.batch_alter_table('cards', recreate='always') as batch_op:
         batch_op.create_foreign_key(
             'cards_sighting_id_fkey', 'sightings', ['sighting_id'], ['id'],
             ondelete='CASCADE',
         )
 
-    with op.batch_alter_table('jobs', recreate='batch_alter_table') as batch_op:
+    with op.batch_alter_table('jobs', recreate='always') as batch_op:
         batch_op.create_foreign_key(
             'jobs_sighting_id_fkey', 'sightings', ['sighting_id'], ['id'],
             ondelete='CASCADE',
@@ -33,13 +33,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table('cards', recreate='batch_alter_table') as batch_op:
+    with op.batch_alter_table('cards', recreate='always') as batch_op:
         batch_op.drop_constraint('cards_sighting_id_fkey', type_='foreignkey')
         batch_op.create_foreign_key(
             'cards_sighting_id_fkey', 'sightings', ['sighting_id'], ['id'],
         )
 
-    with op.batch_alter_table('jobs', recreate='batch_alter_table') as batch_op:
+    with op.batch_alter_table('jobs', recreate='always') as batch_op:
         batch_op.drop_constraint('jobs_sighting_id_fkey', type_='foreignkey')
         batch_op.create_foreign_key(
             'jobs_sighting_id_fkey', 'sightings', ['sighting_id'], ['id'],
