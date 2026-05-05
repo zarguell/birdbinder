@@ -6,6 +6,22 @@
 
 BirdBinder is a self-hosted PWA that turns bird sighting photos into collectible digital cards. Users submit photos → AI identifies the species → cards are generated with AI art → users collect, trade, and organize cards in binders.
 
+## Branching Strategy
+
+| Branch | Purpose | CI Build |
+|--------|---------|----------|
+| `dev` | Day-to-day development. All PRs target here. | `ghcr.io/zarguell/birdbinder:dev` + SHA |
+| `main` | Stable. Merge from dev to release. | `ghcr.io/zarguell/birdbinder:latest` + `vYYMMDD` + SHA |
+| `v*` tags | Versioned releases after merging to main. | `ghcr.io/zarguell/birdbinder:X.Y.Z` + `X.Y` + SHA |
+
+**Workflow:**
+1. Develop on `dev` (or create PRs targeting `dev`)
+2. When ready, merge to main: `git checkout main && git merge dev && git push`
+3. Tag a release: `git tag vX.Y.Z && git push --tags` (or create a GitHub Release)
+4. Renovate creates dependency PRs against `dev`
+
+**Local dev:** Use `docker compose build` / `docker compose up` for local development. CI builds are for deployed environments.
+
 ## Repository & Architecture
 
 ```
@@ -316,6 +332,8 @@ The Dockerfile builds frontend (Node 20) then backend (Python 3.13). Entrypoint:
 4. `uvicorn` (port 8000) + `huey_consumer` (2 workers)
 
 Volumes: `./backend/data:/app/data` (DBs), `./backend/storage:/app/storage` (uploads)
+
+**CI/CD:** GitHub Actions builds and pushes to GHCR on every push to `dev`, `main`, and `v*` tags. See [Branching Strategy](#branching-strategy) for details.
 
 ## Checklist Before Changing Anything
 

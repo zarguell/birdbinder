@@ -2,10 +2,10 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   lint-and-test:
@@ -32,8 +32,3 @@ jobs:
         working-directory: backend
         run: |
           pytest tests/ -v --tb=short
-
-  docker:
-    needs: lint-and-test
-    uses: ./.github/workflows/docker.yml
-    secrets: inherit
