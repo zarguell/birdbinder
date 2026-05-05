@@ -210,12 +210,13 @@ async def _extract_json_from_reasoning(reasoning: str, original_prompt: str) -> 
 
 # -- Card art generation -----------------------------------------------------
 
-TEXT_TO_ART_PROMPT = """Create a collectible trading card illustration of a {common_name} ({scientific_name}) in a {pose} pose.
-The style should be {style}. The illustration should be suitable for a birding card collection.
-The image should show the bird prominently with a clean background suitable for card art."""
+TEXT_TO_ART_PROMPT = """Create an illustration of a {common_name} ({scientific_name}) in a {pose} pose.
+The style should be {style}. The bird should be prominently centered with a clean, uncluttered background.
+Do NOT add any text, borders, frames, or card-like elements. Only the bird and its environment."""
 
-IMAGE_TO_ART_PROMPT = """Transform this photo of a {common_name} ({scientific_name}) into a collectible trading card illustration in {style} style.
-Keep the bird recognizable and prominent. Replace the background with a clean card-art background suitable for a birding card collection."""
+IMAGE_TO_ART_PROMPT = """Transform this photo of a {common_name} ({scientific_name}) into a {style} style illustration.
+Keep the bird recognizable and prominent. Replace the background with a clean, uncluttered environment.
+Do NOT add any text, borders, frames, or card-like elements. Only the bird and its environment."""
 
 
 def _build_art_prompt(species_info: dict, style: str, prompt_hint: str | None = None) -> str:
