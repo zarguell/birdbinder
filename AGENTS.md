@@ -289,7 +289,19 @@ When deleting sightings, the photo and thumbnail files on disk are **not** delet
 
 **Rule:** When deleting cards, check if any binder uses it as `cover_card_id` and null it out.
 
-### 13. eBird API Integration Is a Stub
+### 13. AI Art Prompts: Describe the Component, Not the Product
+
+The AI generates a **bird illustration** — the app composites it into a card with borders, holographic effects, text overlays, etc. Do NOT tell the AI it's making a "trading card" — weaker models will draw borders, text, and card frames that clash with the app's own chrome.
+
+**Rule:** Prompts should describe only what the AI needs to produce: the bird illustration, the style, and a clean background. Explicitly say "Do NOT add any text, borders, frames, or card-like elements." See `TEXT_TO_ART_PROMPT` and `IMAGE_TO_ART_PROMPT` in `ai.py`.
+
+### 14. DB Setting Overrides Must Be Passed Explicitly
+
+Settings like `ai_image_model` can be overridden in the `app_settings` DB table. Card generation reads these overrides in `_run_card_generation` and `_run_card_art_regeneration`, but each call site must explicitly pass them to `generate_card_art()`. Adding a new override? Check every call site.
+
+**We were burned:** `_run_card_art_regeneration` read `image_model_override` from DB but forgot to pass it to `generate_card_art()`, so regeneration always used the default env var model.
+
+### 15. eBird API Integration Is a Stub
 
 `fetch_region_frequencies()` returns `{}`. Rarity tiers use static family-based heuristics with deterministic hash-based variation. The real eBird API call is commented out.
 
