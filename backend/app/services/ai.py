@@ -333,6 +333,11 @@ async def _generate_image_to_image(image_path: str | Path, prompt: str, model: s
                 headers=headers,
                 files=files,
             )
+            if resp.status_code >= 400:
+                logger.error(
+                    "Image-to-image API error: status=%d body=%s",
+                    resp.status_code, resp.text[:500],
+                )
             resp.raise_for_status()
             return _extract_b64_from_response(resp.json())
 
@@ -361,6 +366,11 @@ async def _generate_text_to_image(prompt: str, model: str) -> str:
             headers=headers,
             json=payload,
         )
+        if resp.status_code >= 400:
+            logger.error(
+                "Text-to-image API error: status=%d body=%s model=%s",
+                resp.status_code, resp.text[:500], payload.get("model"),
+            )
         resp.raise_for_status()
         return _extract_b64_from_response(resp.json())
 
