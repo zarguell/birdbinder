@@ -191,6 +191,34 @@ async def delete_sighting(
     if not sighting:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found")
 
+    # Collect card IDs for activity and binder_card cleanup
+    card_ids = [c.id for c in sighting.cards]
+
+    # Delete binder_cards referencing these cards (DB FK cascade not enforced in SQLite)
+    if card_ids:
+        from app.models.binder import BinderCard
+        await db.execute(
+            BinderCard.__table__.delete().where(
+                BinderCard.card_id.in_(card_ids),
+            )
+        )
+
+    # Delete activities referencing this sighting and its cards
+    from app.models.activity import Activity
+    if card_ids:
+        await db.execute(
+            Activity.__table__.delete().where(
+                Activity.reference_id.in_(card_ids),
+                Activity.activity_type == "card",
+            )
+        )
+    await db.execute(
+        Activity.__table__.delete().where(
+            Activity.reference_id == sighting_id,
+            Activity.activity_type == "sighting",
+        )
+    )
+
     await db.delete(sighting)
     await db.commit()
 

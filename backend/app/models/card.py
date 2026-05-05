@@ -15,7 +15,7 @@ class Card(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     sighting_id: Mapped[uuid.UUID | None] = mapped_column(
-        String(36), ForeignKey("sightings.id"), nullable=True
+        String(36), ForeignKey("sightings.id", ondelete="CASCADE"), nullable=True
     )
     user_identifier: Mapped[str] = mapped_column(String(255), index=True)
     species_common: Mapped[str] = mapped_column(String(255), index=True)

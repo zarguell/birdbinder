@@ -105,6 +105,205 @@ async def test_delete_sighting(auth_client, sighting, db_session):
 
 
 @pytest.mark.asyncio
+async def test_delete_sighting_cascades_to_cards(auth_client, db_session):
+    """Deleting a sighting should also delete its cards."""
+    from app.models.sighting import Sighting
+    from app.models.card import Card
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        status="identified",
+        species_code="norcar",
+        species_common="Northern Cardinal",
+    )
+    db_session.add(sighting)
+    await db_session.flush()
+
+    card = Card(
+        id=str(uuid.uuid4()),
+        sighting_id=sighting.id,
+        user_identifier=TEST_USER,
+        species_common="Northern Cardinal",
+        species_code="norcar",
+    )
+    db_session.add(card)
+    await db_session.commit()
+
+    # Delete the sighting
+    resp = await auth_client.delete(f"/api/sightings/{sighting.id}")
+    assert resp.status_code == 204
+
+    # Verify sighting is gone
+    resp = await auth_client.get(f"/api/sightings/{sighting.id}")
+    assert resp.status_code == 404
+
+    # Verify card is gone
+    from sqlalchemy import select as sa_select
+    result = await db_session.execute(sa_select(Card).where(Card.id == card.id))
+    assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_delete_sighting_cascades_to_jobs(auth_client, db_session):
+    """Deleting a sighting should also delete its jobs."""
+    from app.models.sighting import Sighting
+    from app.models.job import Job
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        status="pending",
+    )
+    db_session.add(sighting)
+    await db_session.flush()
+
+    job = Job(
+        id=str(uuid.uuid4()),
+        sighting_id=sighting.id,
+        type="identify",
+        status="completed",
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    resp = await auth_client.delete(f"/api/sightings/{sighting.id}")
+    assert resp.status_code == 204
+
+    from sqlalchemy import select as sa_select
+    result = await db_session.execute(sa_select(Job).where(Job.id == job.id))
+    assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_delete_sighting_cascades_to_activities(auth_client, db_session):
+    """Deleting a sighting should delete sighting and card activities."""
+    from app.models.sighting import Sighting
+    from app.models.card import Card
+    from app.models.activity import Activity
+    from sqlalchemy import select as sa_select
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        status="identified",
+        species_code="norcar",
+        species_common="Northern Cardinal",
+    )
+    db_session.add(sighting)
+    await db_session.flush()
+
+    card = Card(
+        id=str(uuid.uuid4()),
+        sighting_id=sighting.id,
+        user_identifier=TEST_USER,
+        species_common="Northern Cardinal",
+        species_code="norcar",
+    )
+    db_session.add(card)
+    await db_session.flush()
+
+    sighting_activity = Activity(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        activity_type="sighting",
+        reference_id=sighting.id,
+        description="New sighting",
+    )
+    card_activity = Activity(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        activity_type="card",
+        reference_id=card.id,
+        description="New card earned",
+    )
+    db_session.add(sighting_activity)
+    db_session.add(card_activity)
+    await db_session.commit()
+
+    resp = await auth_client.delete(f"/api/sightings/{sighting.id}")
+    assert resp.status_code == 204
+
+    # Both activities should be gone
+    result = await db_session.execute(
+        sa_select(Activity).where(Activity.id == sighting_activity.id)
+    )
+    assert result.scalar_one_or_none() is None
+
+    result = await db_session.execute(
+        sa_select(Activity).where(Activity.id == card_activity.id)
+    )
+    assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_delete_sighting_cascades_to_binder_cards(auth_client, db_session):
+    """Deleting a sighting should cascade: sighting → card → binder_card."""
+    from app.models.sighting import Sighting
+    from app.models.card import Card
+    from app.models.binder import Binder, BinderCard
+    from sqlalchemy import select as sa_select
+
+    sighting = Sighting(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        status="identified",
+        species_code="norcar",
+        species_common="Northern Cardinal",
+    )
+    db_session.add(sighting)
+    await db_session.flush()
+
+    card = Card(
+        id=str(uuid.uuid4()),
+        sighting_id=sighting.id,
+        user_identifier=TEST_USER,
+        species_common="Northern Cardinal",
+        species_code="norcar",
+    )
+    db_session.add(card)
+    await db_session.flush()
+
+    binder = Binder(
+        id=str(uuid.uuid4()),
+        user_identifier=TEST_USER,
+        name="My Binder",
+    )
+    db_session.add(binder)
+    await db_session.flush()
+
+    binder_card = BinderCard(
+        id=str(uuid.uuid4()),
+        binder_id=binder.id,
+        card_id=card.id,
+        position=0,
+    )
+    db_session.add(binder_card)
+    await db_session.commit()
+
+    resp = await auth_client.delete(f"/api/sightings/{sighting.id}")
+    assert resp.status_code == 204
+
+    # Binder card should be gone (cascade via card FK)
+    result = await db_session.execute(
+        sa_select(BinderCard).where(BinderCard.id == binder_card.id)
+    )
+    assert result.scalar_one_or_none() is None
+
+    # Card should be gone
+    result = await db_session.execute(
+        sa_select(Card).where(Card.id == card.id)
+    )
+    assert result.scalar_one_or_none() is None
+
+    # Binder itself should still exist
+    result = await db_session.execute(
+        sa_select(Binder).where(Binder.id == binder.id)
+    )
+    assert result.scalar_one_or_none() is not None
+
+
+@pytest.mark.asyncio
 async def test_no_auth_config_returns_local_user(client, db_engine):
     """When no auth is configured, requests without auth header proceed as 'local-user'."""
     from app.db import get_db

@@ -41,5 +41,10 @@ class Sighting(Base):
     id_method: Mapped[str | None] = mapped_column(String(20), nullable=True, default="manual")
 
     cards: Mapped[list["Card"]] = relationship(  # noqa: F821
-        "Card", back_populates="sighting", lazy="selectin"
+        "Card", back_populates="sighting", lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    jobs: Mapped[list["Job"]] = relationship(  # noqa: F821
+        "Job", back_populates="sighting", lazy="selectin",
+        cascade="all, delete-orphan",
     )

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import String, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models.enums import JobType, JobStatus
@@ -18,7 +18,7 @@ class Job(Base):
         String(20), index=True
     )
     sighting_id: Mapped[uuid.UUID | None] = mapped_column(
-        String(36), ForeignKey("sightings.id"), nullable=True
+        String(36), ForeignKey("sightings.id", ondelete="CASCADE"), nullable=True
     )
     status: Mapped[str] = mapped_column(
         String(20), default=JobStatus.pending.value, index=True
@@ -32,4 +32,8 @@ class Job(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    sighting: Mapped["Sighting | None"] = relationship(  # noqa: F821
+        "Sighting", back_populates="jobs",
     )
