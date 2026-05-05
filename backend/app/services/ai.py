@@ -293,14 +293,34 @@ async def _generate_image_to_image(image_path: str | Path, prompt: str, model: s
     Uses multipart form upload (OpenAI-compatible).
     Returns base64-encoded image data.
     """
+    from PIL import Image as PILImage
+    from io import BytesIO
+
     base_url = (settings.ai_base_url or "https://api.openai.com/v1").rstrip("/")
     headers = {
         "Authorization": f"Bearer {settings.ai_api_key}",
     }
 
-    with open(image_path, "rb") as img_file:
+    # Resize image with Pillow before upload (many models cap input at 1024x1024)
+    MAX_DIMENSION = 1024
+    with PILImage.open(image_path) as img:
+        orig_size = img.size
+        if max(img.size) > MAX_DIMENSION:
+            img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), PILImage.LANCZOS)
+            logger.info(
+                "Image-to-image: resized %s: %s -> %s",
+                image_path, orig_size, img.size,
+            )
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        img_bytes = buf.getvalue()
+
+    img_file_like = BytesIO(img_bytes)
+    with img_file_like:
         files = {
-            "image": ("photo.jpg", img_file, "image/jpeg"),
+            "image": ("photo.jpg", img_file_like, "image/jpeg"),
             "prompt": (None, prompt),
             "model": (None, model),
             "n": (None, "1"),
