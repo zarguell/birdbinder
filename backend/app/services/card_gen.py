@@ -230,6 +230,7 @@ def _run_card_art_regeneration(job_id: str, card_id: str, prompt_hint: str | Non
                     species_info=species_info,
                     prompt_hint=prompt_hint,
                     style_override=effective_style,
+                    image_model_override=image_model_override,
                 )
             )
             if art_path:
