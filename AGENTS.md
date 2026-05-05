@@ -307,6 +307,22 @@ Settings like `ai_image_model` can be overridden in the `app_settings` DB table.
 
 **Rule:** Don't assume rarity tiers are based on real observation data. They're deterministic from species_code + family.
 
+### 16. Lazy Loading Crashes in Async Endpoints
+
+SQLAlchemy's `default` lazy loading strategy emits synchronous SQL, which raises `MissingGreenlet` or similar errors inside async endpoints. **Line 195 in `sightings.py`** has this exact bug — `sighting.cards` triggers a lazy load on an async session that's already expired.
+
+**Rule:** Always use `selectinload()` or `joinedload()` for relationships you need to access in async endpoints. Import from `sqlalchemy.orm`:
+```python
+from sqlalchemy.orm import selectinload
+sighting = (await db.execute(
+    select(Sighting)
+    .options(selectinload(Sighting.cards))
+    .where(Sighting.id == sighting_id)
+)).scalar_one_or_none()
+```
+
+**Affected endpoints:** `DELETE /api/sightings/{id}` (line 195) — known to return 500 in production.
+
 ---
 
 ## API Conventions
