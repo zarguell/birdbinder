@@ -246,6 +246,22 @@ AI models return JSON in unpredictable formats. The parser in `ai.py` handles:
 
 **Rule:** For schema changes, always create a proper Alembic migration. ensure_schema is defense-in-depth only.
 
+### 8b. SQLite Alembic Migrations: No Named FK Constraints
+
+SQLite does not name foreign key constraints. Alembic's `batch_alter_table` with `drop_constraint('some_fk_name', type_='foreignkey')` will fail with `KeyError` because SQLite has no FK names to reference.
+
+**Rule:** To modify an existing FK (e.g., add `ondelete='CASCADE'`), use `recreate='batch_alter_table'` to rebuild the table:
+
+```python
+with op.batch_alter_table('mytable', recreate='batch_alter_table') as batch_op:
+    batch_op.create_foreign_key(
+        'fk_name', 'other_table', ['col'], ['id'],
+        ondelete='CASCADE',
+    )
+```
+
+The `recreate` parameter tells Alembic to create a new table, copy data, swap, and drop — which naturally picks up the new FK definition from the model.
+
 ### 9. Test API Key Is Hardcoded
 
 Tests use `TEST_API_KEY="***"` (literal string). Auth is mocked via `unittest.mock.patch` on `app.dependencies.validate_api_key` and `app.auth.validate_api_key`.
