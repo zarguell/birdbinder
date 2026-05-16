@@ -35,27 +35,15 @@ def _run_card_generation(job_id: str, sighting_id: str):
             if not sighting:
                 raise ValueError(f"Sighting {sighting_id} not found")
 
-            # Get rarity tier (needed for species_info and card creation)
+            # Get rarity tier (must be before card art to pass correct tier to AI)
             rarity_tier = "common"
             try:
                 from app.services.rarity import get_rarity_tier
-                # Look up user's region for eBird live rarity
-                user_region = None
-                if sighting.user_identifier:
-                    try:
-                        from app.models.user import User
-                        user = session.query(User).filter(
-                            User.email == sighting.user_identifier
-                        ).first()
-                        if user and user.region:
-                            user_region = user.region
-                    except Exception:
-                        pass
-                rarity_tier = get_rarity_tier(sighting.species_code, region=user_region)
+                rarity_tier = get_rarity_tier(sighting.species_code)
             except ImportError:
                 pass
 
-            # Determine card art path
+            # Determine card art URL
             card_art_url = None
             if settings.ai_api_key:
                 try:
