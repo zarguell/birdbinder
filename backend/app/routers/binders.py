@@ -3,6 +3,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
+from app.crud import get_owned_or_404, paginated_owned_list, delete_owned
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models.binder import Binder, BinderCard
@@ -41,25 +42,12 @@ async def list_binders(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Binder).where(Binder.user_identifier == user)
-    count_query = select(func.count()).select_from(Binder).where(Binder.user_identifier == user)
-    total = (await db.execute(count_query)).scalar() or 0
-    result = await db.execute(
-        query.order_by(Binder.updated_at.desc()).offset(offset).limit(limit)
-    )
-    binders = result.scalars().all()
-    items = []
-    for b in binders:
-        card_count_q = select(func.count()).select_from(BinderCard).where(
-            BinderCard.binder_id == b.id
-        )
-        cc = (await db.execute(card_count_q)).scalar() or 0
-        items.append(
-            BinderRead.model_validate(b, from_attributes=True).model_copy(
-                update={"card_count": cc}
-            )
-        )
-    return BinderList(items=items, total=total, limit=limit, offset=offset)
+    items, total = await paginated_owned_list(db, Binder, user, limit, offset, order_field="updated_at")
+    enriched = []
+    for b in items:
+        cc = (await db.execute(select(func.count()).select_from(BinderCard).where(BinderCard.binder_id == b.id))).scalar() or 0
+        enriched.append(BinderRead.model_validate(b, from_attributes=True).model_copy(update={"card_count": cc}))
+    return BinderList(items=enriched, total=total, limit=limit, offset=offset)
 
 
 @router.get("/binders/{binder_id}", response_model=BinderRead)
@@ -68,19 +56,9 @@ async def get_binder(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Binder).where(Binder.id == binder_id, Binder.user_identifier == user)
-    )
-    binder = result.scalar_one_or_none()
-    if not binder:
-        raise HTTPException(status_code=404, detail="Binder not found")
-    card_count_q = select(func.count()).select_from(BinderCard).where(
-        BinderCard.binder_id == binder_id
-    )
-    cc = (await db.execute(card_count_q)).scalar() or 0
-    return BinderRead.model_validate(binder, from_attributes=True).model_copy(
-        update={"card_count": cc}
-    )
+    binder = await get_owned_or_404(db, Binder, binder_id, user, detail="Binder not found")
+    cc = (await db.execute(select(func.count()).select_from(BinderCard).where(BinderCard.binder_id == binder_id))).scalar() or 0
+    return BinderRead.model_validate(binder, from_attributes=True).model_copy(update={"card_count": cc})
 
 
 @router.get("/binders/{binder_id}/cards", response_model=list[CardRead])
@@ -95,13 +73,7 @@ async def list_binder_cards(
     db: AsyncSession = Depends(get_db),
 ) -> list[CardRead]:
     """List cards in a binder with optional filtering."""
-    # Verify binder ownership
-    result = await db.execute(
-        select(Binder).where(Binder.id == binder_id, Binder.user_identifier == user)
-    )
-    binder = result.scalar_one_or_none()
-    if not binder:
-        raise HTTPException(status_code=404, detail="Binder not found")
+    await get_owned_or_404(db, Binder, binder_id, user, detail="Binder not found")
 
     # Build query: cards that are in this binder
     query = (
@@ -134,12 +106,7 @@ async def update_binder(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Binder).where(Binder.id == binder_id, Binder.user_identifier == user)
-    )
-    binder = result.scalar_one_or_none()
-    if not binder:
-        raise HTTPException(status_code=404, detail="Binder not found")
+    binder = await get_owned_or_404(db, Binder, binder_id, user, detail="Binder not found")
     if data.name is not None:
         binder.name = data.name
     if data.description is not None:
@@ -163,14 +130,7 @@ async def delete_binder(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Binder).where(Binder.id == binder_id, Binder.user_identifier == user)
-    )
-    binder = result.scalar_one_or_none()
-    if not binder:
-        raise HTTPException(status_code=404, detail="Binder not found")
-    await db.delete(binder)
-    await db.commit()
+    await delete_owned(db, Binder, binder_id, user, detail="Binder not found")
 
 
 @router.post(
@@ -183,12 +143,7 @@ async def add_card_to_binder(
     db: AsyncSession = Depends(get_db),
 ):
     # Verify binder ownership
-    result = await db.execute(
-        select(Binder).where(Binder.id == binder_id, Binder.user_identifier == user)
-    )
-    binder = result.scalar_one_or_none()
-    if not binder:
-        raise HTTPException(status_code=404, detail="Binder not found")
+    await get_owned_or_404(db, Binder, binder_id, user, detail="Binder not found")
     # Verify card ownership
     result = await db.execute(
         select(Card).where(Card.id == data.card_id, Card.user_identifier == user)
@@ -226,12 +181,7 @@ async def remove_card_from_binder(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Binder).where(Binder.id == binder_id, Binder.user_identifier == user)
-    )
-    binder = result.scalar_one_or_none()
-    if not binder:
-        raise HTTPException(status_code=404, detail="Binder not found")
+    await get_owned_or_404(db, Binder, binder_id, user, detail="Binder not found")
     result = await db.execute(
         select(BinderCard).where(
             BinderCard.binder_id == binder_id, BinderCard.card_id == card_id
