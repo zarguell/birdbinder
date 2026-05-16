@@ -2,13 +2,12 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud import get_owned_or_404, paginated_owned_list
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models.sighting import Sighting
-from app.models.job import Job
 from app.models.enums import PoseVariant
 from app.schemas.sighting import SightingRead, SightingList, SightingOverride
 from app.services.species import get_species_by_code
@@ -142,21 +141,11 @@ async def list_sightings(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Sighting).where(Sighting.user_identifier == user)
-    count_query = select(func.count()).select_from(Sighting).where(Sighting.user_identifier == user)
-
+    filters = []
     if status_filter:
-        query = query.where(Sighting.status == status_filter)
-        count_query = count_query.where(Sighting.status == status_filter)
-
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    query = query.order_by(Sighting.submitted_at.desc()).offset(offset).limit(limit)
-    result = await db.execute(query)
-    sightings = result.scalars().all()
-
-    return SightingList(items=sightings, total=total, limit=limit, offset=offset)
+        filters.append(Sighting.status == status_filter)
+    items, total = await paginated_owned_list(db, Sighting, user, limit, offset, *filters, order_field="submitted_at")
+    return SightingList(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/sightings/{sighting_id}", response_model=SightingRead)
@@ -165,15 +154,7 @@ async def get_sighting(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
-        )
-    )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found")
-    return sighting
+    return await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
 
 
 @router.delete("/sightings/{sighting_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -182,14 +163,7 @@ async def delete_sighting(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
-        )
-    )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found")
+    sighting = await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
 
     # Collect card IDs for activity and binder_card cleanup
     card_ids = [c.id for c in sighting.cards]
@@ -231,16 +205,7 @@ async def update_sighting(
     db: AsyncSession = Depends(get_db),
 ):
     """Manual species override or pose variant update for a sighting."""
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
-        )
-    )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found"
-        )
+    sighting = await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
 
     if override.species_code is not None:
         species = get_species_by_code(override.species_code)
@@ -324,15 +289,7 @@ async def identify_sighting(
 ):
     from app.services.identifier import start_identification
 
-    # Verify ownership
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
-        )
-    )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(status_code=404, detail="Sighting not found")
+    sighting = await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
     try:
         job_id = await start_identification(sighting_id, db)
         return {"job_id": job_id, "status": "pending"}

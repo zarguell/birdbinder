@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from datetime import datetime
 
+from app.types import PaginatedList
+
 
 class BinderCardRead(BaseModel):
     id: str
@@ -34,11 +36,7 @@ class BinderRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class BinderList(BaseModel):
-    items: list[BinderRead]
-    total: int
-    limit: int
-    offset: int
+BinderList = PaginatedList[BinderRead]
 
 
 class AddCardToBinder(BaseModel):

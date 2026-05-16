@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from datetime import datetime
 
+from app.types import PaginatedList
+
 
 class TradeCreate(BaseModel):
     offered_to: str  # recipient user identifier
@@ -21,8 +23,4 @@ class TradeRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TradeList(BaseModel):
-    items: list[TradeRead]
-    total: int
-    limit: int
-    offset: int
+TradeList = PaginatedList[TradeRead]

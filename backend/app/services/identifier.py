@@ -4,19 +4,15 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db import sync_engine as _sync_engine
 from app.huey_instance import huey
 from app.models.enums import JobStatus, JobType, PoseVariant
 from app.services.ai import DEFAULT_ID_PROMPT, call_vision_model
 
 logger = logging.getLogger(__name__)
-
-# NOTE: Huey tasks run synchronously, so we use synchronous SQLAlchemy for DB access
-_sync_db_url = settings.database_url.replace("sqlite+aiosqlite", "sqlite")
-_sync_engine = create_engine(_sync_db_url)
 
 
 def _run_identification(job_id: str, sighting_id: str, image_path: str):
