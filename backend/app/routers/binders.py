@@ -145,12 +145,7 @@ async def add_card_to_binder(
     # Verify binder ownership
     await get_owned_or_404(db, Binder, binder_id, user, detail="Binder not found")
     # Verify card ownership
-    result = await db.execute(
-        select(Card).where(Card.id == data.card_id, Card.user_identifier == user)
-    )
-    card = result.scalar_one_or_none()
-    if not card:
-        raise HTTPException(status_code=404, detail="Card not found")
+    card = await get_owned_or_404(db, Card, data.card_id, user, detail="Card not found")
     # Check for duplicate
     existing = await db.execute(
         select(BinderCard).where(

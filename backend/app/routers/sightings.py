@@ -9,7 +9,6 @@ from app.crud import get_owned_or_404, paginated_owned_list
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models.sighting import Sighting
-from app.models.job import Job
 from app.models.enums import PoseVariant
 from app.schemas.sighting import SightingRead, SightingList, SightingOverride
 from app.services.species import get_species_by_code
