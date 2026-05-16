@@ -2,17 +2,13 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db import sync_engine as _sync_engine
 from app.huey_instance import huey
 
 logger = logging.getLogger(__name__)
-
-# NOTE: Huey tasks run synchronously, so we use synchronous SQLAlchemy for DB access
-_sync_db_url = settings.database_url.replace("sqlite+aiosqlite", "sqlite")
-_sync_engine = create_engine(_sync_db_url)
 
 CARD_ART_PROMPT_TEMPLATE = """Create a collectible trading card illustration of a {common_name} ({scientific_name}) in a {pose} pose.
 The style should be {style}. The illustration should be suitable for a birding card collection.
