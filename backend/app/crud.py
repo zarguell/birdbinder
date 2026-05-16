@@ -1,16 +1,20 @@
+from typing import Any, TypeVar
+
 from fastapi import HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+T = TypeVar("T")
+
 
 async def get_owned_or_404(
     db: AsyncSession,
-    model,
+    model: type[T],
     id: str,
     user: str,
     detail: str = "Not found",
     user_field: str = "user_identifier",
-):
+) -> T:
     """Get a user-owned object by ID, raising 404 if missing or not owned."""
     result = await db.execute(
         select(model).where(
@@ -26,7 +30,7 @@ async def get_owned_or_404(
 
 async def paginated_owned_list(
     db: AsyncSession,
-    model,
+    model: type[T],
     user: str,
     limit: int,
     offset: int,
@@ -45,9 +49,15 @@ async def paginated_owned_list(
 
     total = (await db.execute(count_query)).scalar() or 0
 
-    order_col = getattr(model, order_field) if order_field else (
-        getattr(model, "created_at", None) or getattr(model, "submitted_at")
-    )
+    if order_field:
+        order_col = getattr(model, order_field)
+    else:
+        order_col = getattr(model, "created_at", None) or getattr(model, "submitted_at", None)
+        if order_col is None:
+            raise ValueError(
+                f"Model {model.__name__} has no default order column "
+                "(tried 'created_at' and 'submitted_at')"
+            )
     result = await db.execute(
         query.order_by(order_col.desc()).offset(offset).limit(limit)
     )
@@ -57,12 +67,12 @@ async def paginated_owned_list(
 
 async def delete_owned(
     db: AsyncSession,
-    model,
+    model: type[T],
     id: str,
     user: str,
     detail: str = "Not found",
     user_field: str = "user_identifier",
-):
+) -> None:
     """Delete a user-owned object by ID. Raises 404 if missing."""
     obj = await get_owned_or_404(db, model, id, user, detail=detail, user_field=user_field)
     await db.delete(obj)
