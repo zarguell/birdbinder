@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from datetime import datetime, date
 
+from app.types import PaginatedList
+
 
 class CardSetCreate(BaseModel):
     name: str
@@ -41,11 +43,7 @@ class CardSetRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CardSetList(BaseModel):
-    items: list[CardSetRead]
-    total: int
-    limit: int
-    offset: int
+CardSetList = PaginatedList[CardSetRead]
 
 
 class SetProgress(BaseModel):
