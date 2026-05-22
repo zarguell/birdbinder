@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from app.schemas.sighting import SightingInfo, SightingRead
+from app.types import PaginatedList
 
 
 class CardRead(BaseModel):
@@ -27,12 +28,7 @@ class CardRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CardList(BaseModel):
-    items: list[CardRead]
-    total: int
-    limit: int
-    offset: int
-
+CardList = PaginatedList[CardRead]
 
 # Resolve the forward reference "CardRead" in SightingRead.cards
 SightingRead.model_rebuild(_types_namespace={"CardRead": CardRead})

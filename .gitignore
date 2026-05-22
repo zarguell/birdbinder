@@ -9,6 +9,7 @@ dist/
 *.db
 storage/
 backend/app/static/
+.worktrees/
 .DS_Store
 backend/data/
 backend/app/static/

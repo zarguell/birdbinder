@@ -1,6 +1,8 @@
 from pydantic import BaseModel, computed_field
 from datetime import datetime
 
+from app.types import PaginatedList
+
 
 class SightingCreate(BaseModel):
     notes: str | None = None
@@ -76,8 +78,4 @@ class SightingRead(SightingInfo):
     cards: list["CardRead"] = []
 
 
-class SightingList(BaseModel):
-    items: list[SightingRead]
-    total: int
-    limit: int
-    offset: int
+SightingList = PaginatedList[SightingRead]
