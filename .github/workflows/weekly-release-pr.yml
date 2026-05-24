@@ -1,0 +1,65 @@
+name: Weekly Release PR
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 9 AM UTC
+  workflow_dispatch:
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: check
+        run: |
+          git fetch origin main
+          CHANGES=$(git log origin/main..origin/dev --oneline)
+          if [ -z "$CHANGES" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes since last release"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes found:"
+            echo "$CHANGES"
+            {
+              echo "changelog<<EOF"
+              echo "$CHANGES"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+      - name: Close existing release PRs
+        if: steps.check.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh pr list --base main --head dev --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh pr close "$EXISTING" -c "Superseded by new weekly release PR"
+          fi
+
+      - name: Create release PR
+        if: steps.check.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          WEEK=$(date +%Y-W%V)
+          gh pr create             --base main             --head dev             --title "Release: week of $(date +%Y-%m-%d)"             --body "## Weekly Release PR
+
+          **Week:** $WEEK
+
+          ### Changes since last release:
+          \`\`\`
+          ${{ steps.check.outputs.changelog }}
+          \`\`\`
+
+          ---
+          Review and merge when ready. A release tag will be created automatically."

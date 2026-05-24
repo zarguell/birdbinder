@@ -26,7 +26,32 @@ export class ApiError extends Error {
 	}
 }
 
-// Sightings
+function qs(params?: Record<string, string | number | undefined | null>): string {
+	if (!params) return '';
+	const q = new URLSearchParams();
+	for (const [k, v] of Object.entries(params)) {
+		if (v !== undefined && v !== null) q.set(k, String(v));
+	}
+	const s = q.toString();
+	return s ? `?${s}` : '';
+}
+
+type PaginatedResponse<T> = { items: T[]; total: number; limit: number; offset: number };
+
+function crud<T = any>(path: string) {
+	return {
+		list: (params?: Record<string, string | number | undefined>) =>
+			request<PaginatedResponse<T>>(`/${path}${qs(params)}`),
+		get: (id: string) => request<T>(`/${path}/${id}`),
+		create: (data: Partial<T>) =>
+			request<T>(`/${path}`, { method: 'POST', body: JSON.stringify(data) }),
+		update: (id: string, data: Partial<T>) =>
+			request<T>(`/${path}/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+		delete: (id: string) =>
+			request<void>(`/${path}/${id}`, { method: 'DELETE' }),
+	};
+}
+
 export const sightings = {
 	list: (params?: { limit?: number; offset?: number; status?: string }) => {
 		const q = new URLSearchParams();
@@ -57,10 +82,9 @@ export const sightings = {
 		request<any>(`/sightings/${id}`, {
 			method: 'PATCH',
 			body: JSON.stringify({ species_code: speciesCode, species_common: speciesCommon })
-		})
+		}),
 };
 
-// Species
 export const species = {
 	search: (query: string, params?: { family?: string; limit?: number; offset?: number }) => {
 		const q = new URLSearchParams({ q: query });
@@ -72,21 +96,10 @@ export const species = {
 	families: () => request<any>(`/species/families`)
 };
 
-// Cards
 export const cards = {
-	list: (params?: { limit?: number; offset?: number }) => {
-		const q = new URLSearchParams();
-		if (params?.limit) q.set('limit', String(params.limit));
-		if (params?.offset) q.set('offset', String(params.offset));
-		return request<any>(`/cards?${q}`);
-	},
-	get: (id: string) => request<any>(`/cards/${id}`),
+	...crud<any>('cards'),
 	generate: (sightingId: string) =>
-		request<any>(`/cards/generate/${sightingId}`, {
-			method: 'POST',
-		}),
-	delete: (id: string) =>
-		request<void>(`/cards/${id}`, { method: 'DELETE' }),
+		request<any>(`/cards/generate/${sightingId}`, { method: 'POST' }),
 	regenerateArt: (cardId: string, promptHint?: string, styleOverride?: string) =>
 		request<{ job_id: string; status: string }>(`/cards/${cardId}/regenerate-art`, {
 			method: 'POST',
@@ -97,69 +110,29 @@ export const cards = {
 		})
 };
 
-// Binders
 export const binders = {
-	list: (params?: { limit?: number; offset?: number }) => {
-		const q = new URLSearchParams();
-		if (params?.limit) q.set('limit', String(params.limit));
-		if (params?.offset) q.set('offset', String(params.offset));
-		return request<any>(`/binders?${q}`);
-	},
-	get: (id: string) => request<any>(`/binders/${id}`),
-	create: (data: { name: string; description?: string }) =>
-		request<any>('/binders', { method: 'POST', body: JSON.stringify(data) }),
-	update: (id: string, data: { name?: string; description?: string }) =>
-		request<any>(`/binders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-	delete: (id: string) =>
-		request<void>(`/binders/${id}`, { method: 'DELETE' }),
+	...crud<any>('binders'),
 	addCard: (binderId: string, cardId: string) =>
 		request<any>(`/binders/${binderId}/cards`, {
 			method: 'POST',
 			body: JSON.stringify({ card_id: cardId })
 		}),
 	removeCard: (binderId: string, cardId: string) =>
-		request<void>(`/binders/${binderId}/cards/${cardId}`, { method: 'DELETE' })
+		request<void>(`/binders/${binderId}/cards/${cardId}`, { method: 'DELETE' }),
 };
 
-// Sets
 export const sets = {
-	list: (params?: { limit?: number; offset?: number }) => {
-		const q = new URLSearchParams();
-		if (params?.limit) q.set('limit', String(params.limit));
-		if (params?.offset) q.set('offset', String(params.offset));
-		return request<any>(`/sets?${q}`);
-	},
-	get: (id: string) => request<any>(`/sets/${id}`),
-	create: (data: { name: string; description?: string; region?: string; card_targets?: string[] }) =>
-		request<any>('/sets', { method: 'POST', body: JSON.stringify(data) }),
-	update: (id: string, data: Record<string, unknown>) =>
-		request<any>(`/sets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-	delete: (id: string) =>
-		request<void>(`/sets/${id}`, { method: 'DELETE' }),
-	progress: (id: string) => request<any>(`/sets/${id}/progress`)
+	...crud<any>('sets'),
+	progress: (id: string) => request<any>(`/sets/${id}/progress`),
 };
 
-// Trades
 export const trades = {
-	list: (params?: { status?: string; limit?: number; offset?: number }) => {
-		const q = new URLSearchParams();
-		if (params?.status) q.set('status', params.status);
-		if (params?.limit) q.set('limit', String(params.limit));
-		if (params?.offset) q.set('offset', String(params.offset));
-		return request<any>(`/trades?${q}`);
-	},
-	get: (id: string) => request<any>(`/trades/${id}`),
-	create: (data: { offered_to: string; offered_card_ids: string[]; requested_card_ids: string[] }) =>
-		request<any>('/trades', { method: 'POST', body: JSON.stringify(data) }),
-	accept: (id: string) =>
-		request<any>(`/trades/${id}/accept`, { method: 'POST' }),
-	decline: (id: string) =>
-		request<any>(`/trades/${id}/decline`, { method: 'POST' }),
-	cancel: (id: string) =>
-		request<any>(`/trades/${id}/cancel`, { method: 'POST' })
+	...crud<any>('trades'),
+	accept: (id: string) => request<any>(`/trades/${id}/accept`, { method: 'POST' }),
+	decline: (id: string) => request<any>(`/trades/${id}/decline`, { method: 'POST' }),
+	cancel: (id: string) => request<any>(`/trades/${id}/cancel`, { method: 'POST' }),
 };
 
-// Jobs
 export const jobs = {
 	get: (id: string) => request<any>(`/jobs/${id}`)
 };
