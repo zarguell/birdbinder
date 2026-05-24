@@ -856,6 +856,7 @@ async def test_generate_text_to_image_happy_path(mock_settings):
     mock_settings.ai_base_url = "https://api.example.com/v2"
 
     fake_resp = MagicMock()
+    fake_resp.status_code = 200
     fake_resp.json.return_value = {"data": [{"b64_json": FAKE_B64}]}
     fake_resp.raise_for_status = MagicMock()
 
@@ -887,6 +888,7 @@ async def test_generate_image_to_image_happy_path(mock_settings, fake_image):
     mock_settings.ai_base_url = "https://api.example.com/v2"
 
     fake_resp = MagicMock()
+    fake_resp.status_code = 200
     fake_resp.json.return_value = {"data": [{"b64_json": FAKE_B64}]}
     fake_resp.raise_for_status = MagicMock()
 
