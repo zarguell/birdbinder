@@ -98,7 +98,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28" },
     { name = "huey", specifier = ">=2.5" },
     { name = "openai", specifier = ">=1.60" },
-    { name = "pillow", specifier = ">=11.0" },
+    { name = "pillow", specifier = ">=12.3.0" },
     { name = "pillow-heif", specifier = ">=0.18" },
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
