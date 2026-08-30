@@ -235,7 +235,8 @@ def test_run_card_generation_sighting_not_found_fails_job(mock_settings, task_db
     db.commit()
 
     from app.services.card_gen import _run_card_generation
-    _run(_run_card_generation, "card_gen", task_db, job.id, fake_id)
+    with pytest.raises(ValueError):
+        _run(_run_card_generation, "card_gen", task_db, job.id, fake_id)
 
     db.expire_all()
     updated_job = db.get(Job, job.id)

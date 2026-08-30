@@ -19,6 +19,10 @@ async def get_job_status(
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    # Ownership: jobs carry the owner's identifier; legacy rows (NULL) were
+    # backfilled by migration where possible and stay visible
+    if job.user_identifier is not None and job.user_identifier != user:
+        raise HTTPException(status_code=404, detail="Job not found")
     return {
         "id": job.id,
         "type": job.type,

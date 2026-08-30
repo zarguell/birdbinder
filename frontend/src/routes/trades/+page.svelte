@@ -16,10 +16,14 @@
 	// Create trade form
 	let formRecipient = $state('');
 	let formOfferedIds = $state<string[]>([]);
-	let formRequestedCodes = $state('');
+	let formRequestedIds = $state<string[]>([]);
 	let formLoading = $state(false);
 	let formError = $state('');
 	let formSuccess = $state('');
+
+	// Recipient's duplicate tradeable cards — the pool to request from
+	let recipientCards = $state<any[]>([]);
+	let loadingRecipientCards = $state(false);
 
 	// User search dropdown
 	let allUsers = $state<any[]>([]);
@@ -51,14 +55,36 @@
 		}
 	}
 
-	function selectUser(user: any) {
+	async function selectUser(user: any) {
 		formRecipient = user.email;
 		dropdownOpen = false;
 		searchQuery = '';
+		formRequestedIds = [];
+		await loadRecipientCards();
+	}
+
+	async function loadRecipientCards() {
+		if (!formRecipient) return;
+		loadingRecipientCards = true;
+		try {
+			recipientCards = await users.getTradeableCards(formRecipient);
+		} catch {
+			recipientCards = [];
+		} finally {
+			loadingRecipientCards = false;
+		}
 	}
 
 	function clearRecipient() {
 		formRecipient = '';
+		recipientCards = [];
+		formRequestedIds = [];
+	}
+
+	function toggleRequested(cardId: string) {
+		formRequestedIds = formRequestedIds.includes(cardId)
+			? formRequestedIds.filter((id) => id !== cardId)
+			: [...formRequestedIds, cardId];
 	}
 
 	const statusColors: Record<string, string> = {
@@ -83,8 +109,17 @@
 
 	async function loadTradeableCards() {
 		try {
-			const res = await cards.list({ limit: 100 });
-			tradeableCards = (res.items ?? []).filter((c: any) => c.tradeable && c.duplicate_count > 0);
+			// Page through all cards so large collections aren't silently capped
+			let items: any[] = [];
+			let total = Infinity;
+			while (items.length < Math.min(total, 500)) {
+				const res = await cards.list({ limit: 100, offset: items.length });
+				total = res.total ?? 0;
+				const pageItems = res.items ?? [];
+				items = items.concat(pageItems);
+				if (pageItems.length === 0) break;
+			}
+			tradeableCards = items.filter((c: any) => c.tradeable && c.duplicate_count > 0);
 		} catch {
 			// Non-critical
 		}
@@ -159,12 +194,8 @@
 			formError = 'Select at least one card to offer';
 			return;
 		}
-		const requestedIds = formRequestedCodes
-			.split(',')
-			.map((t) => t.trim())
-			.filter(Boolean);
-		if (requestedIds.length === 0) {
-			formError = 'Enter at least one card to request';
+		if (formRequestedIds.length === 0) {
+			formError = 'Select at least one card to request';
 			return;
 		}
 
@@ -173,12 +204,13 @@
 			await trades.create({
 				offered_to: formRecipient.trim(),
 				offered_card_ids: formOfferedIds,
-				requested_card_ids: requestedIds
+				requested_card_ids: formRequestedIds
 			});
 			formSuccess = 'Trade created successfully!';
 			formRecipient = '';
 			formOfferedIds = [];
-			formRequestedCodes = '';
+			formRequestedIds = [];
+			recipientCards = [];
 			showCreateForm = false;
 			await loadTrades();
 		} catch (err: any) {
@@ -356,15 +388,39 @@
 			</div>
 
 			<div>
-				<label for="trade-requested" class="mb-1 block text-sm font-medium text-gray-400">Cards to Request *</label>
-				<input
-					id="trade-requested"
-					type="text"
-					bind:value={formRequestedCodes}
-					class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
-					placeholder="Comma-separated species codes: ybcu, bansw"
-				/>
-				<p class="mt-1 text-xs text-gray-600">Species codes you want in return</p>
+				<label class="mb-1 block text-sm font-medium text-gray-400">Cards to Request *</label>
+				{#if !formRecipient}
+					<p class="text-sm text-gray-500">Select a recipient first to see their tradeable cards</p>
+				{:else if loadingRecipientCards}
+					<div class="flex items-center justify-center rounded-lg border border-gray-700 bg-gray-800/50 p-3">
+						<div class="h-5 w-5 animate-spin rounded-full border-2 border-gray-700 border-t-green-500"></div>
+					</div>
+				{:else if recipientCards.length > 0}
+					<div class="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-gray-700 bg-gray-800/50 p-3">
+						{#each recipientCards as card (card.id)}
+							<label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-700/50">
+								<input
+									type="checkbox"
+									checked={formRequestedIds.includes(card.id)}
+									onchange={() => toggleRequested(card.id)}
+									class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-green-500"
+								/>
+								<div class="min-w-0 flex-1">
+									<span class="text-sm text-gray-200">{card.species_common}</span>
+									{#if card.species_code}
+										<span class="ml-1.5 text-xs text-gray-500 italic">{card.species_code}</span>
+									{/if}
+								</div>
+								<span class="text-xs text-gray-500">×{card.duplicate_count}</span>
+							</label>
+						{/each}
+					</div>
+					<p class="mt-1 text-xs text-gray-600">
+						{formRequestedIds.length} selected
+					</p>
+				{:else}
+					<p class="text-sm text-gray-500">{formRecipient.split('@')[0]} has no duplicate cards to trade right now</p>
+				{/if}
 			</div>
 
 			<div class="flex justify-end gap-3">
@@ -467,11 +523,19 @@
 							<div>
 								<p class="mb-1.5 text-xs font-medium uppercase tracking-wider text-gray-500">Offered</p>
 								<div class="flex flex-wrap gap-1.5">
-									{#each (trade.offered_card_ids ?? []) as cardId}
-										<span class="rounded-full bg-blue-900/30 border border-blue-700/40 px-2.5 py-1 text-xs text-blue-300">
-											{cardId}
-										</span>
-									{/each}
+									{#if (trade.offered_cards ?? []).length > 0}
+										{#each trade.offered_cards as card (card.id)}
+											<span class="rounded-full bg-blue-900/30 border border-blue-700/40 px-2.5 py-1 text-xs text-blue-300">
+												{card.species_common}
+											</span>
+										{/each}
+									{:else}
+										{#each (trade.offered_card_ids ?? []) as cardId}
+											<span class="rounded-full bg-blue-900/30 border border-blue-700/40 px-2.5 py-1 text-xs text-blue-300">
+												{cardId.slice(0, 8)}…
+											</span>
+										{/each}
+									{/if}
 									{#if (trade.offered_card_ids ?? []).length === 0}
 										<span class="text-xs text-gray-600">None</span>
 									{/if}
@@ -482,11 +546,19 @@
 							<div>
 								<p class="mb-1.5 text-xs font-medium uppercase tracking-wider text-gray-500">Requested</p>
 								<div class="flex flex-wrap gap-1.5">
-									{#each (trade.requested_card_ids ?? []) as cardId}
-										<span class="rounded-full bg-purple-900/30 border border-purple-700/40 px-2.5 py-1 text-xs text-purple-300">
-											{cardId}
-										</span>
-									{/each}
+									{#if (trade.requested_cards ?? []).length > 0}
+										{#each trade.requested_cards as card (card.id)}
+											<span class="rounded-full bg-purple-900/30 border border-purple-700/40 px-2.5 py-1 text-xs text-purple-300">
+												{card.species_common}
+											</span>
+										{/each}
+									{:else}
+										{#each (trade.requested_card_ids ?? []) as cardId}
+											<span class="rounded-full bg-purple-900/30 border border-purple-700/40 px-2.5 py-1 text-xs text-purple-300">
+												{cardId.slice(0, 8)}…
+											</span>
+										{/each}
+									{/if}
 									{#if (trade.requested_card_ids ?? []).length === 0}
 										<span class="text-xs text-gray-600">None</span>
 									{/if}

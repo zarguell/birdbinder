@@ -6,15 +6,21 @@
 	let allCards = $state<any[]>([]);
 	let binderList = $state<any[]>([]);
 	let activeBinderId = $state('all');
+	let totalCards = $state(0);
 
 	let loading = $state(true);
 	let error = $state('');
+	let loadingMore = $state(false);
 
 	// New binder form
 	let showNewBinder = $state(false);
 	let newBinderName = $state('');
 	let newBinderDesc = $state('');
 	let creatingBinder = $state(false);
+
+	// Delete confirmation: binder id pending a second click
+	let confirmingDeleteId = $state<string | null>(null);
+	let confirmDeleteTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Filters & sort
 	let searchQuery = $state('');
@@ -41,6 +47,7 @@
 				binders.list({ limit: 50 })
 			]);
 			allCards = cardData.items ?? [];
+			totalCards = cardData.total ?? allCards.length;
 			binderList = binderData.items ?? [];
 			if (binderList.length === 0) {
 				activeBinderId = 'all';
@@ -50,6 +57,32 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function loadMoreCards() {
+		loadingMore = true;
+		try {
+			const res = await cards.list({ limit: 100, offset: allCards.length });
+			allCards = [...allCards, ...(res.items ?? [])];
+			totalCards = res.total ?? totalCards;
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to load more cards';
+		} finally {
+			loadingMore = false;
+		}
+	}
+
+	function handleDeleteClick(id: string) {
+		if (confirmingDeleteId === id) {
+			// Second click within the window — proceed with deletion
+			if (confirmDeleteTimer) clearTimeout(confirmDeleteTimer);
+			confirmingDeleteId = null;
+			deleteBinder(id);
+			return;
+		}
+		confirmingDeleteId = id;
+		if (confirmDeleteTimer) clearTimeout(confirmDeleteTimer);
+		confirmDeleteTimer = setTimeout(() => (confirmingDeleteId = null), 3000);
 	}
 
 	async function createBinder() {
@@ -194,13 +227,19 @@
 					</button>
 					<button
 						type="button"
-						onclick={() => deleteBinder(binder.id)}
-						class="ml-1 flex h-5 w-5 items-center justify-center rounded text-gray-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-						aria-label="Delete binder"
+						onclick={() => handleDeleteClick(binder.id)}
+						class="ml-1 flex items-center rounded px-1.5 py-0.5 text-xs transition-colors {confirmingDeleteId === binder.id
+							? 'bg-red-950/60 text-red-300 font-medium'
+							: 'text-gray-600 hover:text-red-400'}"
+						aria-label={confirmingDeleteId === binder.id ? 'Confirm delete binder' : 'Delete binder'}
 					>
-						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-						</svg>
+						{#if confirmingDeleteId === binder.id}
+							Delete?
+						{:else}
+							<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						{/if}
 					</button>
 				</div>
 			{/each}
@@ -335,9 +374,24 @@
 			</button>
 		</div>
 	{:else}
-		<p class="text-xs text-gray-500">{filteredCards().length} card{filteredCards().length !== 1 ? 's' : ''} shown</p>
-		<CardGrid cards={filteredCards()} onselect={handleCardSelect} />
-	{/if}
+			<p class="text-xs text-gray-500">
+				Showing {filteredCards().length} of {allCards.length} loaded card{allCards.length !== 1 ? 's' : ''}
+				{#if totalCards > allCards.length}(of {totalCards} total){/if}
+			</p>
+			<CardGrid cards={filteredCards()} onselect={handleCardSelect} />
+			{#if allCards.length < totalCards}
+				<div class="flex justify-center pt-2">
+					<button
+						type="button"
+						onclick={loadMoreCards}
+						disabled={loadingMore}
+						class="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 transition-colors hover:border-gray-600 hover:text-white disabled:opacity-50"
+					>
+						{loadingMore ? 'Loading…' : `Load more (${totalCards - allCards.length} remaining)`}
+					</button>
+				</div>
+			{/if}
+		{/if}
 </div>
 
 <!-- Card Detail Modal -->

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { sightings, ApiError } from '$lib/api';
+	import exifr from 'exifr';
 
 	let file: File | null = $state(null);
 	let previewUrl: string = $state('');
@@ -13,6 +14,11 @@
 	let exifLon: number | null = $state(null);
 	let locationDisplayName: string = $state('');
 	let showLocationPrompt: boolean = $state(false);
+	let currentExif: { datetime: string | null; lat: number | null; lon: number | null } = {
+		datetime: null,
+		lat: null,
+		lon: null
+	};
 
 	function handleFileSelect(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -32,10 +38,10 @@
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
 		previewUrl = URL.createObjectURL(f);
 
-		// Extract EXIF to check for GPS
-		const exif = await readExifFromFile(f);
-		exifLat = exif.lat;
-		exifLon = exif.lon;
+		// Extract EXIF to check for GPS (parsed once, reused on upload)
+		currentExif = await readExifFromFile(f);
+		exifLat = currentExif.lat;
+		exifLon = currentExif.lon;
 		showLocationPrompt = exifLat === null && exifLon === null;
 	}
 
@@ -45,99 +51,36 @@
 		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
-	function readExifFromFile(file: File): Promise<{ datetime: string | null; lat: number | null; lon: number | null }> {
-		return new Promise((resolve) => {
-			const reader = new FileReader();
-			reader.onload = function (e) {
-				const buffer = e.target?.result as ArrayBuffer;
-				if (!buffer) {
-					resolve({ datetime: null, lat: null, lon: null });
-					return;
-				}
-				const view = new DataView(buffer);
-				let datetime: string | null = null;
-				let lat: number | null = null;
-				let lon: number | null = null;
+	function pad(n: number): string {
+		return String(n).padStart(2, '0');
+	}
 
-				if (view.byteLength < 2 || view.getUint16(0) !== 0xffd8) {
-					resolve({ datetime, lat, lon });
-					return;
-				}
+	async function readExifFromFile(
+		f: File
+	): Promise<{ datetime: string | null; lat: number | null; lon: number | null }> {
+		try {
+			// exifr reads the GPS IFD and Exif IFD correctly (the old hand-rolled
+			// parser only scanned IFD0, so geotagged photos usually came back empty)
+			const parsed = await exifr.parse(f, { tiff: true, exif: true, gps: true });
+			if (!parsed) return { datetime: null, lat: null, lon: null };
 
-				let offset = 2;
-				while (offset < view.byteLength - 1) {
-					const marker = view.getUint16(offset);
-					if (marker === 0xffd9 || marker === 0xffd7) {
-						break;
-					}
-					if ((marker & 0xff00) !== 0xff00) {
-						break;
-					}
-					const length = view.getUint16(offset + 2);
-					const segment = view.getUint16(offset + 4);
+			const lat = typeof parsed.latitude === 'number' ? parsed.latitude : null;
+			const lon = typeof parsed.longitude === 'number' ? parsed.longitude : null;
 
-					if (segment === 0xe1) {
-						const exifOffset = offset + 4;
-						if (view.byteLength < exifOffset + 6) break;
-						const exifHeader = new TextDecoder().decode(
-							new Uint8Array(buffer, exifOffset, 4)
-						);
-						if (exifHeader === "Exif") {
-							const tiffOffset = exifOffset + 6;
-							const byteOrder = view.getUint16(tiffOffset);
-							const littleEndian = byteOrder === 0x4949;
-							const ifdOffset = view.getUint32(tiffOffset + 4, littleEndian);
-							const ifdStart = tiffOffset + ifdOffset;
+			let datetime: string | null = null;
+			const dt: unknown =
+				parsed.DateTimeOriginal ?? parsed.CreateDate ?? parsed.DateTime ?? parsed.DateTimeDigitized;
+			if (dt instanceof Date && !isNaN(dt.getTime())) {
+				// Backend expects "YYYY:MM:DD HH:MM:SS" — keep camera-local time
+				datetime = `${dt.getFullYear()}:${pad(dt.getMonth() + 1)}:${pad(dt.getDate())} ${pad(
+					dt.getHours()
+				)}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+			}
 
-							let numEntries = view.getUint16(ifdStart, littleEndian);
-							for (let i = 0; i < numEntries; i++) {
-								const entryOffset = ifdStart + 2 + i * 12;
-								const tag = view.getUint16(entryOffset, littleEndian);
-								const type = view.getUint16(entryOffset + 2, littleEndian);
-								const numValues = view.getUint32(entryOffset + 4, littleEndian);
-
-								if (tag === 0x9003 || tag === 0x0132) {
-									const valueOffset = tiffOffset + view.getUint32(entryOffset + 8, littleEndian);
-									const strLen = type === 2 ? numValues : 2;
-									if (valueOffset + strLen <= view.byteLength) {
-										const timeStr = new TextDecoder().decode(
-											new Uint8Array(buffer, valueOffset, Math.min(19, strLen))
-										);
-										const match = timeStr.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
-										if (match) {
-											datetime = `${match[1]}:${match[2]}:${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
-										}
-									}
-								}
-
-								if (tag === 0x0002 || tag === 0x0004) {
-									const valueOffset = tiffOffset + view.getUint32(entryOffset + 8, littleEndian);
-									if (valueOffset + 24 <= view.byteLength) {
-										const toDecimal = (off: number): number => {
-											const deg = view.getUint32(off, littleEndian);
-											const min = view.getUint32(off + 4, littleEndian);
-											const sec = view.getUint32(off + 8, littleEndian) / view.getUint32(off + 12, littleEndian);
-											return deg + min / 60 + sec / 3600;
-										};
-										const gpsLat = toDecimal(valueOffset);
-										const gpsLon = toDecimal(valueOffset + 12);
-										const latRef = String.fromCharCode(view.getUint8(valueOffset + 20));
-										const lonRef = String.fromCharCode(view.getUint8(valueOffset + 22));
-										lat = latRef === 'S' ? -gpsLat : gpsLat;
-										lon = lonRef === 'W' ? -gpsLon : gpsLon;
-									}
-								}
-							}
-						}
-						break;
-					}
-					offset += 2 + 2 + length;
-				}
-
-				resolve({ datetime, lat, lon });
-			};
-			reader.readAsArrayBuffer(file);
-		});
+			return { datetime, lat, lon };
+		} catch {
+			return { datetime: null, lat: null, lon: null };
+		}
 	}
 
 	async function handleUpload() {
@@ -147,8 +90,8 @@
 		error = '';
 
 		try {
-			const exif = await readExifFromFile(file);
-			const result = await sightings.upload(file, exif, locationDisplayName || undefined);
+			// Reuse the EXIF parsed in setFile — the file hasn't changed
+			const result = await sightings.upload(file, currentExif, locationDisplayName || undefined);
 			sightingId = result.id ?? result.sighting_id ?? null;
 			if (sightingId) {
 				goto(`/sightings/${sightingId}`);

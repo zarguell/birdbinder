@@ -188,7 +188,8 @@ def test_run_identification_failure_marks_job_failed(mock_settings, task_db, db,
         side_effect=ValueError("AI returned empty content"),
     ):
         from app.services.identifier import _run_identification
-        _run(_run_identification, "identifier", task_db, job.id, sighting.id, str(tmp_path / "test.jpg"))
+        with pytest.raises(ValueError):
+            _run(_run_identification, "identifier", task_db, job.id, sighting.id, str(tmp_path / "test.jpg"))
 
     db.expire_all()
 

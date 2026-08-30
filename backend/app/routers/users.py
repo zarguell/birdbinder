@@ -38,6 +38,39 @@ async def list_users(
     ]
 
 
+@router.get("/users/{email}/cards")
+async def list_user_tradeable_cards(
+    email: str,
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List a user's duplicate tradeable cards (for building trade requests)."""
+    if email == current_user:
+        raise HTTPException(status_code=400, detail="Use your own collection for offered cards")
+
+    stmt = (
+        select(Card)
+        .where(
+            Card.user_identifier == email,
+            Card.tradeable == True,  # noqa: E712
+            Card.duplicate_count > 1,
+        )
+        .order_by(Card.species_common)
+    )
+    result = await db.execute(stmt)
+    cards = result.scalars().all()
+    return [
+        {
+            "id": c.id,
+            "species_common": c.species_common,
+            "species_code": c.species_code,
+            "rarity_tier": c.rarity_tier,
+            "duplicate_count": c.duplicate_count,
+        }
+        for c in cards
+    ]
+
+
 @router.get("/users/{email}")
 async def get_user_profile(
     email: str,

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -68,12 +69,16 @@ async def create_sighting(
         extension = CT_EXTENSIONS.get(ct, "jpg")
 
         file_content = await file.read()
-        photo_path = storage.save_upload(file_content, sighting_id, extension)
+        # Pillow decode/encode and disk I/O are blocking — run in a worker
+        # thread so large photos don't stall the event loop
+        photo_path = await asyncio.to_thread(
+            storage.save_upload, file_content, sighting_id, extension
+        )
         abs_photo = storage.get_file_path(photo_path)
 
         # Extract EXIF BEFORE any conversion (Pillow strips EXIF during save)
         # Server-side extraction (may be empty if browser already stripped EXIF)
-        exif = image.extract_exif(abs_photo)
+        exif = await asyncio.to_thread(image.extract_exif, abs_photo)
         if exif:
             exif_camera_model = exif.get("camera_model")
             if exif_lat_val is None:
@@ -90,9 +95,9 @@ async def create_sighting(
                     pass
 
         # Convert HEIC/HEIF to JPEG if needed
-        if image.is_heif(abs_photo):
+        if await asyncio.to_thread(image.is_heif, abs_photo):
             try:
-                abs_photo = image.convert_heif_to_jpeg(abs_photo)
+                abs_photo = await asyncio.to_thread(image.convert_heif_to_jpeg, abs_photo)
                 photo_path = f"sightings/{sighting_id}.jpg"
                 logger.info("Converted HEIF to JPEG: %s", abs_photo)
             except ValueError:
@@ -102,7 +107,7 @@ async def create_sighting(
         try:
             thumb_dir = storage.get_storage_path() / "sightings"
             thumb_path = thumb_dir / f"{sighting_id}_thumb.jpg"
-            image.generate_thumbnail(abs_photo, thumb_path)
+            await asyncio.to_thread(image.generate_thumbnail, abs_photo, thumb_path)
             thumbnail_path = f"sightings/{sighting_id}_thumb.jpg"
         except Exception:
             pass  # Thumbnail generation failure should not block sighting creation

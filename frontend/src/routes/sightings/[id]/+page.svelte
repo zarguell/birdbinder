@@ -16,6 +16,8 @@
 	let actionMessageType: 'success' | 'error' = $state('success');
 	let jobStatus = $state<any>(null);
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	let cardJobInterval: ReturnType<typeof setInterval> | null = null;
+	let regenIntervals = new Map<string, ReturnType<typeof setInterval>>();
 	let editingLocation = $state(false);
 	let editLat = $state(0);
 	let editLon = $state(0);
@@ -28,9 +30,11 @@
 
 	function startPolling() {
 		stopPolling();
+		let pollErrors = 0;
 		pollInterval = setInterval(async () => {
 			try {
 				const res = await sightings.getJob(id);
+				pollErrors = 0;
 				jobStatus = res.job;
 				if (jobStatus && (jobStatus.status === 'completed' || jobStatus.status === 'failed')) {
 					stopPolling();
@@ -47,7 +51,16 @@
 						actionMessage = '';
 					}
 				}
-			} catch { /* ignore poll errors */ }
+			} catch {
+				// Give up after repeated poll failures instead of spinning forever
+				pollErrors += 1;
+				if (pollErrors >= 5) {
+					stopPolling();
+					identifying = false;
+					actionMessage = 'Lost track of the identification job — please retry.';
+					actionMessageType = 'error';
+				}
+			}
 		}, 2000);
 	}
 
@@ -56,6 +69,15 @@
 			clearInterval(pollInterval);
 			pollInterval = null;
 		}
+	}
+
+	function stopCardPolling() {
+		if (cardJobInterval) {
+			clearInterval(cardJobInterval);
+			cardJobInterval = null;
+		}
+		for (const interval of regenIntervals.values()) clearInterval(interval);
+		regenIntervals.clear();
 	}
 
 	async function loadSighting() {
@@ -80,7 +102,10 @@
 
 	$effect(() => {
 		if (id) loadSighting();
-		return () => stopPolling();
+		return () => {
+			stopPolling();
+			stopCardPolling();
+		};
 	});
 
 	function formatDate(dateStr: string): string {
@@ -127,14 +152,42 @@ async function handleIdentify() {
 		generating = true;
 		actionMessage = '';
 		try {
-			await cards.generate(id);
+			const res = await cards.generate(id);
 			actionMessage = 'Card generation started!';
 			actionMessageType = 'success';
-			setTimeout(() => loadSighting(), 3000);
+			// Poll the generation job so the UI updates as soon as the card
+			// is ready (and shows a clear error if it fails)
+			stopCardPolling();
+			let pollErrors = 0;
+			cardJobInterval = setInterval(async () => {
+				try {
+					const job = await jobs.get(res.job_id);
+					pollErrors = 0;
+					if (job.status === 'completed' || job.status === 'failed') {
+						stopCardPolling();
+						generating = false;
+						await loadSighting();
+						if (job.status === 'failed') {
+							actionMessage = `Card generation failed: ${job.error || 'Unknown error'}`;
+							actionMessageType = 'error';
+						} else {
+							actionMessage = 'Your card is ready!';
+							actionMessageType = 'success';
+						}
+					}
+				} catch {
+					pollErrors += 1;
+					if (pollErrors >= 5) {
+						stopCardPolling();
+						generating = false;
+						actionMessage = 'Lost track of the card generation job — check back shortly.';
+						actionMessageType = 'error';
+					}
+				}
+			}, 2000);
 		} catch (err) {
 			actionMessage = err instanceof Error ? err.message : 'Card generation failed';
 			actionMessageType = 'error';
-		} finally {
 			generating = false;
 		}
 	}
@@ -216,18 +269,36 @@ async function handleIdentify() {
 		regenCardIds.add(cardId);
 		try {
 			const res = await cards.regenerateArt(cardId);
-			const pollInterval = setInterval(async () => {
+			let pollErrors = 0;
+			const interval = setInterval(async () => {
 				try {
 					const job = await jobs.get(res.job_id);
+					pollErrors = 0;
 					if (job.status === 'completed' || job.status === 'failed') {
-						clearInterval(pollInterval);
+						clearInterval(interval);
+						regenIntervals.delete(cardId);
 						regenCardIds.delete(cardId);
-						if (job.status === 'completed') {
-							await loadSighting();
+						await loadSighting();
+						if (job.status === 'failed') {
+							actionMessage = `Art regeneration failed: ${job.error || 'Unknown error'}`;
+							actionMessageType = 'error';
+						} else {
+							actionMessage = 'Card art updated!';
+							actionMessageType = 'success';
 						}
 					}
-				} catch { /* ignore poll errors */ }
+				} catch {
+					pollErrors += 1;
+					if (pollErrors >= 5) {
+						clearInterval(interval);
+						regenIntervals.delete(cardId);
+						regenCardIds.delete(cardId);
+						actionMessage = 'Lost track of the regeneration job — check back shortly.';
+						actionMessageType = 'error';
+					}
+				}
 			}, 2000);
+			regenIntervals.set(cardId, interval);
 		} catch (err) {
 			regenCardIds.delete(cardId);
 			actionMessage = err instanceof Error ? err.message : 'Failed to start regeneration';

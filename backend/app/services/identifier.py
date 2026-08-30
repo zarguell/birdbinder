@@ -178,10 +178,13 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             job.error = str(e)
             job.completed_at = datetime.now(timezone.utc)
             session.commit()
+            # Re-raise so huey's retry policy applies; a retry resets the job
+            # to running and identification is idempotent (same sighting row)
+            raise
 
 
-# Register as huey task
-@huey.task()
+# Register as huey task — transient AI failures are retried with backoff
+@huey.task(retries=2, retry_delay=30)
 def identify_task(job_id: str, sighting_id: str, image_path: str):
     _run_identification(job_id, sighting_id, image_path)
 
@@ -224,6 +227,7 @@ async def start_identification(sighting_id: str, db) -> str:
         id=str(uuid.uuid4()),
         type=JobType.identify.value,
         sighting_id=sighting_id,
+        user_identifier=sighting.user_identifier,
         status=JobStatus.pending.value,
     )
     db.add(job)
@@ -234,8 +238,18 @@ async def start_identification(sighting_id: str, db) -> str:
     await db.commit()
     await db.refresh(job)
 
-    # Enqueue huey task
-    identify_task(job.id, sighting_id, image_abs)
+    # Enqueue huey task; if the queue is unavailable, fail the job explicitly
+    # so it doesn't sit pending forever
+    try:
+        identify_task(job.id, sighting_id, image_abs)
+    except Exception as e:
+        logger.error("Failed to enqueue identification job %s: %s", job.id, e)
+        job.status = JobStatus.failed.value
+        job.error = f"Failed to enqueue task: {e}"
+        job.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        raise ValueError(f"Failed to enqueue identification: {e}")
+
     logger.info("Enqueued identification job %s for sighting %s", job.id, sighting_id)
 
     return job.id

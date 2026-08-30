@@ -127,11 +127,9 @@ async def refresh_ebird_data(
     db: AsyncSession = Depends(get_db),
 ):
     """Trigger a refresh of eBird frequency data for the user's region."""
-    import os
+    from app.services.ebird_service import _cache, fetch_region_frequencies, get_ebird_api_key
 
-    from app.services.ebird_service import _cache, fetch_region_frequencies
-
-    api_key = os.environ.get("EBIRD_API_KEY")
+    api_key = await get_ebird_api_key(db)
     if not api_key:
         raise HTTPException(
             status_code=400,

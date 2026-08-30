@@ -95,10 +95,11 @@ _cache = FrequencyCache(ttl_seconds=3600)
 # ---------------------------------------------------------------------------
 
 async def get_ebird_api_key(db: Any = None) -> str | None:
-    """Return the eBird API key from the environment or app settings."""
-    key = os.environ.get("EBIRD_API_KEY")
-    if key:
-        return key
+    """Return the eBird API key from settings (env) or the app_settings DB table."""
+    from app.config import settings
+
+    if settings.ebird_api_key:
+        return settings.ebird_api_key
     if db is not None:
         return await app_settings.get_setting(db, "ebird_api_key")
     return None
@@ -133,28 +134,34 @@ def get_ebird_rarity_tier(
 # Fetch & live-lookup helpers
 # ---------------------------------------------------------------------------
 
+# Frequency assigned to species appearing in eBird's "recent notable"
+# observations — chosen so get_ebird_rarity_tier maps it to the "rare" tier.
+NOTABLE_FREQUENCY = 0.01
+
+
 async def fetch_region_frequencies(
     region: str,
     api_key: str,
 ) -> dict[str, float]:
-    """Fetch regional frequency data from the eBird API.
+    """Fetch live rarity data from the eBird API.
 
-    TODO: Implement the actual API call to
-    GET https://api.ebird.org/v2/product/regional-stats/{region}
-    with the ``api_key`` as a query parameter / header.
-    For now, returns an empty dict as a placeholder.
+    Uses ``GET /v2/data/obs/{region}/recent/notable``, which returns rare and
+    unusual observations from the last 14 days. Species currently on the
+    notable list are treated as rare (NOTABLE_FREQUENCY); species absent from
+    the response keep their static taxonomy-based rarity.
     """
-    # TODO: Uncomment and complete when ready to hit the real endpoint.
-    # async with httpx.AsyncClient() as client:
-    #     resp = await client.get(
-    #         f"https://api.ebird.org/v2/product/regional-stats/{region}",
-    #         params={"key": api_key},
-    #         headers={"X-eBirdApiToken": api_key},
-    #     )
-    #     resp.raise_for_status()
-    #     # Parse response into {species_code: frequency, ...}
-    #     ...
-    return {}
+    url = f"https://api.ebird.org/v2/data/obs/{region}/recent/notable"
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(url, params={"back": 14}, headers={"X-eBirdApiToken": api_key})
+        resp.raise_for_status()
+        observations = resp.json()
+
+    freqs: dict[str, float] = {}
+    for obs in observations:
+        code = obs.get("speciesCode")
+        if code:
+            freqs[code] = NOTABLE_FREQUENCY
+    return freqs
 
 
 async def get_live_frequency(

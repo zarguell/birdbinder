@@ -35,6 +35,22 @@ def _run_card_generation(job_id: str, sighting_id: str):
             if not sighting:
                 raise ValueError(f"Sighting {sighting_id} not found")
 
+            # Idempotency guard: a retried/redelivered task must not create a
+            # duplicate card for the same sighting
+            existing_card = (
+                session.query(Card).filter(Card.sighting_id == sighting_id).first()
+            )
+            if existing_card:
+                logger.warning(
+                    "Card %s already exists for sighting %s — completing job %s without duplicate",
+                    existing_card.id, sighting_id, job_id,
+                )
+                job.status = JobStatus.completed.value
+                job.completed_at = datetime.now(timezone.utc)
+                job.result = {"card_id": existing_card.id}
+                session.commit()
+                return
+
             # Get rarity tier (must be before card art to pass correct tier to AI)
             rarity_tier = "common"
             try:
@@ -131,10 +147,13 @@ def _run_card_generation(job_id: str, sighting_id: str):
             job.error = str(e)
             job.completed_at = datetime.now(timezone.utc)
             session.commit()
+            # Re-raise so huey's retry policy applies; the job row already
+            # records the failure and a retry will reset it to running
+            raise
 
 
-# Register as huey task
-@huey.task()
+# Register as huey task — transient AI/DB failures are retried with backoff
+@huey.task(retries=2, retry_delay=30)
 def generate_card_task(job_id: str, sighting_id: str):
     _run_card_generation(job_id, sighting_id)
 
@@ -144,6 +163,9 @@ async def start_card_generation(sighting_id: str, db) -> str:
 
     db is an async session - we create the job record, then enqueue the huey task.
     """
+    from sqlalchemy import select
+
+    from app.models.card import Card
     from app.models.enums import JobStatus, JobType
     from app.models.job import Job
     from app.models.sighting import Sighting
@@ -153,19 +175,49 @@ async def start_card_generation(sighting_id: str, db) -> str:
     if not sighting:
         raise ValueError(f"Sighting {sighting_id} not found")
 
+    # Guard: one card per sighting — repeated clicks must not enqueue
+    # duplicate (billed) art-generation jobs
+    existing_card = (await db.execute(
+        select(Card).where(Card.sighting_id == sighting_id)
+    )).scalar_one_or_none()
+    if existing_card:
+        raise ValueError(f"Card already exists for sighting {sighting_id}")
+
+    # Guard: if a generation job is already pending/running, return it
+    existing_job = (await db.execute(
+        select(Job).where(
+            Job.sighting_id == sighting_id,
+            Job.type == JobType.generate_card.value,
+            Job.status.in_([JobStatus.pending.value, JobStatus.running.value]),
+        )
+    )).scalar_one_or_none()
+    if existing_job:
+        logger.info("Existing card-generation job %s for sighting %s, skipping", existing_job.id, sighting_id)
+        return existing_job.id
+
     # Create job record
     job = Job(
         id=str(uuid.uuid4()),
         type=JobType.generate_card.value,
         sighting_id=sighting_id,
+        user_identifier=sighting.user_identifier,
         status=JobStatus.pending.value,
     )
     db.add(job)
     await db.commit()
     await db.refresh(job)
 
-    # Enqueue huey task
-    generate_card_task(job.id, sighting_id)
+    # Enqueue huey task; if the queue is unavailable, fail the job explicitly
+    # so it doesn't sit pending forever
+    try:
+        generate_card_task(job.id, sighting_id)
+    except Exception as e:
+        logger.error("Failed to enqueue card generation job %s: %s", job.id, e)
+        job.status = JobStatus.failed.value
+        job.error = f"Failed to enqueue task: {e}"
+        job.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        raise ValueError(f"Failed to enqueue card generation: {e}")
 
     return job.id
 
@@ -239,9 +291,10 @@ def _run_card_art_regeneration(job_id: str, card_id: str, prompt_hint: str | Non
             job.error = str(e)
             job.completed_at = datetime.now(timezone.utc)
             session.commit()
+            raise
 
 
-@huey.task()
+@huey.task(retries=2, retry_delay=30)
 def regenerate_card_art_task(job_id: str, card_id: str, prompt_hint: str | None = None, style_override: str | None = None):
     _run_card_art_regeneration(job_id, card_id, prompt_hint, style_override)
 
@@ -260,12 +313,21 @@ async def start_card_art_regeneration(card_id: str, db, prompt_hint: str | None 
         id=str(uuid.uuid4()),
         type=JobType.regenerate_art.value,
         sighting_id=card.sighting_id,
+        user_identifier=card.user_identifier,
         status=JobStatus.pending.value,
     )
     db.add(job)
     await db.commit()
     await db.refresh(job)
 
-    regenerate_card_art_task(job.id, card_id, prompt_hint, style_override)
+    try:
+        regenerate_card_art_task(job.id, card_id, prompt_hint, style_override)
+    except Exception as e:
+        logger.error("Failed to enqueue art regeneration job %s: %s", job.id, e)
+        job.status = JobStatus.failed.value
+        job.error = f"Failed to enqueue task: {e}"
+        job.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        raise ValueError(f"Failed to enqueue art regeneration: {e}")
 
     return job.id

@@ -7,6 +7,7 @@
     let error = $state('');
     let commentInputs = $state<Record<string, string>>({});
     let submittingComment = $state<Record<string, boolean>>({});
+    let commentErrors = $state<Record<string, string>>({});
 
     async function loadFeed() {
         loading = true;
@@ -47,7 +48,8 @@
             }
             commentInputs[activityId] = '';
         } catch (e: any) {
-            console.error('Failed to submit comment:', e);
+            // Keep the user's text so they can retry; surface the failure
+            commentErrors[activityId] = e?.message || 'Failed to post comment';
         } finally {
             submittingComment[activityId] = false;
         }
@@ -190,6 +192,9 @@
                         </div>
                     {/if}
 
+                    {#if commentErrors[activity.id]}
+                        <p class="mt-2 text-xs text-red-400">{commentErrors[activity.id]}</p>
+                    {/if}
                     <!-- Comment Input -->
                     <div class="mt-3 flex gap-2">
                         <input

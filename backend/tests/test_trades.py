@@ -430,3 +430,81 @@ async def test_no_auth_config_returns_local_user(client, db_engine):
         assert response.status_code == 404
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+# ---------------------------------------------------------------------------
+# Trade execution correctness
+# ---------------------------------------------------------------------------
+
+
+async def test_accept_trade_returns_card_summaries(auth_client, db_session):
+    """Trade responses include species summaries so UIs don't show raw UUIDs."""
+    offered_card = _make_card(db_session)
+    requested_card = _make_card(db_session, user=OTHER_USER)
+    await db_session.commit()
+
+    create_resp = await auth_client.post(
+        "/api/trades",
+        json={
+            "offered_to": OTHER_USER,
+            "offered_card_ids": [offered_card.id],
+            "requested_card_ids": [requested_card.id],
+        },
+    )
+    trade_id = create_resp.json()["id"]
+
+    accept_resp = await auth_client.post(f"/api/trades/{trade_id}/accept")
+    # TEST_USER offered the trade, so only the recipient may accept
+    assert accept_resp.status_code == 403
+
+
+async def test_accept_trade_missing_card_returns_409(auth_client, db_session):
+    """Deleting a card after trade creation must not 500 on accept — 409 instead."""
+    offered_card = _make_card(db_session)
+    requested_card = _make_card(db_session, user=OTHER_USER)
+    await db_session.commit()
+
+    create_resp = await auth_client.post(
+        "/api/trades",
+        json={
+            "offered_to": OTHER_USER,
+            "offered_card_ids": [offered_card.id],
+            "requested_card_ids": [requested_card.id],
+        },
+    )
+    trade_id = create_resp.json()["id"]
+
+    # Recipient accepts; the offered card vanished mid-flight
+    await db_session.delete(offered_card)
+    await db_session.commit()
+
+    # Simulate the recipient accepting by patching validate_api_key at request time
+    from unittest.mock import patch as _patch
+
+    with _patch("app.dependencies.validate_api_key", return_value=OTHER_USER):
+        resp = await auth_client.post(f"/api/trades/{trade_id}/accept")
+    assert resp.status_code == 409
+    assert "no longer available" in resp.json()["detail"]
+
+
+async def test_declined_trade_cannot_be_accepted(auth_client, db_session):
+    """A resolved trade can't be accepted again (status guard)."""
+    offered_card = _make_card(db_session)
+    requested_card = _make_card(db_session, user=OTHER_USER)
+    await db_session.commit()
+
+    create_resp = await auth_client.post(
+        "/api/trades",
+        json={
+            "offered_to": OTHER_USER,
+            "offered_card_ids": [offered_card.id],
+            "requested_card_ids": [requested_card.id],
+        },
+    )
+    trade_id = create_resp.json()["id"]
+
+    with patch("app.dependencies.validate_api_key", return_value=OTHER_USER):
+        decline_resp = await auth_client.post(f"/api/trades/{trade_id}/decline")
+        assert decline_resp.status_code == 200
+        accept_resp = await auth_client.post(f"/api/trades/{trade_id}/accept")
+    assert accept_resp.status_code == 409

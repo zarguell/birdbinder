@@ -331,7 +331,8 @@ def test_regen_card_not_found_fails_job(task_db, db):
     job = _make_job(db, str(uuid.uuid4()), job_type="regenerate_art")
     db.commit()
 
-    _run_regen(task_db, job.id, fake_card_id)
+    with pytest.raises(ValueError):
+        _run_regen(task_db, job.id, fake_card_id)
 
     db.expire_all()
     updated_job = db.get(Job, job.id)
@@ -358,7 +359,8 @@ def test_regen_sighting_not_found_fails_job(task_db, db):
     job = _make_job(db, card.sighting_id, job_type="regenerate_art")
     db.commit()
 
-    _run_regen(task_db, job.id, card.id)
+    with pytest.raises(Exception):
+        _run_regen(task_db, job.id, card.id)
 
     db.expire_all()
     updated_job = db.get(Job, job.id)
@@ -386,7 +388,8 @@ def test_regen_ai_failure_fails_job(mock_settings, task_db, db):
     old_url = card.card_art_url
 
     with patch("app.services.ai.generate_card_art", new_callable=AsyncMock, side_effect=Exception("API overloaded")):
-        _run_regen(task_db, job.id, card.id)
+        with pytest.raises(Exception):
+            _run_regen(task_db, job.id, card.id)
 
     db.expire_all()
     updated_job = db.get(Job, job.id)

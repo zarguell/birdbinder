@@ -171,7 +171,9 @@ export const collection = {
 // Users
 export const users = {
 	list: () => request<any[]>('/users'),
-	getProfile: (email: string) => request<any>(`/users/${encodeURIComponent(email)}`)
+	getProfile: (email: string) => request<any>(`/users/${encodeURIComponent(email)}`),
+	getTradeableCards: (email: string) =>
+		request<any[]>(`/users/${encodeURIComponent(email)}/cards`)
 };
 
 // AI Settings

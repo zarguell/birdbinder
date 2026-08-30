@@ -7,11 +7,46 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models.trade import Trade
+from app.models.card import Card
 from app.models.enums import TradeStatus
-from app.schemas.trade import TradeCreate, TradeRead, TradeList
-from app.services.trading import validate_trade, execute_trade
+from app.schemas.trade import TradeCardInfo, TradeCreate, TradeRead, TradeList
+from app.services.trading import validate_trade, execute_trade, claim_pending_trade
 
 router = APIRouter()
+
+
+async def _attach_card_details(db: AsyncSession, trades: list[Trade]) -> None:
+    """Resolve card UUIDs into species summaries for display.
+
+    Sets offered_cards/requested_cards on each Trade; IDs referencing deleted
+    cards are silently dropped.
+    """
+    all_ids = {
+        card_id
+        for t in trades
+        for card_id in list(t.offered_card_ids) + list(t.requested_card_ids)
+    }
+    if not all_ids:
+        return
+    rows = (await db.execute(select(Card).where(Card.id.in_(all_ids)))).scalars().all()
+    cards_by_id = {c.id: c for c in rows}
+
+    def summaries(card_ids: list) -> list[TradeCardInfo]:
+        return [
+            TradeCardInfo(
+                id=card_id,
+                species_common=cards_by_id[card_id].species_common,
+                species_code=cards_by_id[card_id].species_code,
+                rarity_tier=cards_by_id[card_id].rarity_tier,
+                card_art_url=cards_by_id[card_id].card_art_url,
+            )
+            for card_id in card_ids
+            if card_id in cards_by_id
+        ]
+
+    for t in trades:
+        t.offered_cards = summaries(t.offered_card_ids)
+        t.requested_cards = summaries(t.requested_card_ids)
 
 
 @router.post("/trades", response_model=TradeRead, status_code=status.HTTP_201_CREATED)
@@ -34,6 +69,7 @@ async def create_trade(
     db.add(trade)
     await db.commit()
     await db.refresh(trade)
+    await _attach_card_details(db, [trade])
     return trade
 
 
@@ -58,7 +94,8 @@ async def list_trades(
     result = await db.execute(
         query.order_by(Trade.created_at.desc()).offset(offset).limit(limit)
     )
-    trades = result.scalars().all()
+    trades = list(result.scalars().all())
+    await _attach_card_details(db, trades)
     return TradeList(items=trades, total=total, limit=limit, offset=offset)
 
 
@@ -74,6 +111,7 @@ async def get_trade(
         raise HTTPException(status_code=404, detail="Trade not found")
     if trade.offered_by != user and trade.offered_to != user:
         raise HTTPException(status_code=403, detail="Not your trade")
+    await _attach_card_details(db, [trade])
     return trade
 
 
@@ -91,7 +129,17 @@ async def accept_trade(
         raise HTTPException(status_code=403, detail="Only the recipient can accept")
     if trade.status != TradeStatus.pending.value:
         raise HTTPException(status_code=409, detail=f"Trade is {trade.status}")
-    await execute_trade(db, trade)
+    # Atomically claim the trade so a concurrent accept/decline/cancel cannot
+    # double-execute, then re-validate and swap card ownership
+    claimed = await claim_pending_trade(db, trade.id, TradeStatus.accepted)
+    if not claimed:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=f"Trade is {trade.status}")
+    try:
+        await execute_trade(db, trade)
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     await db.commit()
     await db.refresh(trade)
     return trade
@@ -111,8 +159,10 @@ async def decline_trade(
         raise HTTPException(status_code=403, detail="Only the recipient can decline")
     if trade.status != TradeStatus.pending.value:
         raise HTTPException(status_code=409, detail=f"Trade is {trade.status}")
-    trade.status = TradeStatus.declined.value
-    trade.resolved_at = datetime.now(timezone.utc)
+    claimed = await claim_pending_trade(db, trade.id, TradeStatus.declined)
+    if not claimed:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=f"Trade is {trade.status}")
     await db.commit()
     await db.refresh(trade)
     return trade
@@ -132,8 +182,10 @@ async def cancel_trade(
         raise HTTPException(status_code=403, detail="Only the offerer can cancel")
     if trade.status != TradeStatus.pending.value:
         raise HTTPException(status_code=409, detail=f"Trade is {trade.status}")
-    trade.status = TradeStatus.cancelled.value
-    trade.resolved_at = datetime.now(timezone.utc)
+    claimed = await claim_pending_trade(db, trade.id, TradeStatus.cancelled)
+    if not claimed:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=f"Trade is {trade.status}")
     await db.commit()
     await db.refresh(trade)
     return trade

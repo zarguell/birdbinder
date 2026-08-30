@@ -67,6 +67,36 @@ async def health():
     return {"status": "ok"}
 
 
+@app.on_event("startup")
+async def reconcile_stale_jobs():
+    """Mark jobs stuck in 'running' as failed.
+
+    A job left 'running' means the huey consumer died mid-task; on restart
+    nothing would ever complete it, leaving the UI spinning forever.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update
+
+    from app.db import async_session
+    from app.models.enums import JobStatus
+    from app.models.job import Job
+
+    async with async_session() as session:
+        result = await session.execute(
+            update(Job)
+            .where(Job.status == JobStatus.running.value)
+            .values(
+                status=JobStatus.failed.value,
+                error="Interrupted by application restart",
+                completed_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+        if result.rowcount:
+            logger.warning("Marked %d stale running job(s) as failed after restart", result.rowcount)
+
+
 @app.middleware("http")
 async def protect_storage_media(request, call_next):
     """Require authentication for user-uploaded media when auth is configured.
