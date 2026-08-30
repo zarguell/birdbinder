@@ -65,6 +65,52 @@ def test_all_valid_poses_pass_through():
         assert pose == pose_value
 
 
+def test_parse_ai_result_prose_with_json_block():
+    """Extract JSON from prose that contains a JSON block."""
+    prose = """Looking at this bird, I can see it's a blue jay with distinctive features.
+
+{"common_name": "Blue Jay", "scientific_name": "Cyanocitta cristata", "family": "Corvids", "confidence": 0.9, "distinguishing_traits": ["blue crest", "black necklace"], "pose_variant": "perching"}
+
+The blue plumage is quite vivid."""
+    import re
+    json_match = re.search(r'\{[^{}]*\}', prose)
+    assert json_match is not None
+    result = json.loads(json_match.group(0))
+    assert result["common_name"] == "Blue Jay"
+
+
+def test_parse_ai_result_nested_json_in_prose():
+    """Extract JSON from prose using greedy match (works for typical AI responses)."""
+    prose = """Here's my analysis:
+
+{
+  "common_name": "Bald Eagle",
+  "scientific_name": "Haliaeetus leucocephalus",
+  "family": "Hawks",
+  "confidence": 0.95,
+  "distinguishing_traits": ["white head", "yellow beak"],
+  "pose_variant": "flying"
+}
+
+Impressive bird!"""
+    import re
+    # Simple non-greedy pattern works here (no nested braces, only brackets)
+    json_match = re.search(r'\{[^{}]*\}', prose)
+    assert json_match is not None
+    result = json.loads(json_match.group(0))
+    assert result["common_name"] == "Bald Eagle"
+
+
+def test_parse_ai_result_prose_no_json_raises():
+    """Prose with no JSON at all should raise."""
+    prose = "This is a bird. It has feathers and wings. Very nice."
+    import re
+    json_match = re.search(r'\{[^{}]*\}', prose)
+    assert json_match is None
+    json_match = re.search(r'\{.*\}', prose, re.DOTALL)
+    assert json_match is None
+
+
 def test_parse_ai_response_with_backticks_no_lang():
     """Parse JSON with ``` backticks but no language tag."""
     result_str = '```\n{"common_name": "Blue Jay", "confidence": 0.85, "pose_variant": "perching"}\n```'

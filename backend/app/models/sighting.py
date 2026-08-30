@@ -39,7 +39,13 @@ class Sighting(Base):
     pose_variant: Mapped[str | None] = mapped_column(String(20), nullable=True, default="other")
     id_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     id_method: Mapped[str | None] = mapped_column(String(20), nullable=True, default="manual")
+    id_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     cards: Mapped[list["Card"]] = relationship(  # noqa: F821
-        "Card", back_populates="sighting", lazy="selectin"
+        "Card", back_populates="sighting", lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    jobs: Mapped[list["Job"]] = relationship(  # noqa: F821
+        "Job", back_populates="sighting", lazy="selectin",
+        cascade="all, delete-orphan",
     )

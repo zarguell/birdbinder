@@ -8,7 +8,9 @@ from pathlib import Path
 
 from app.config import settings
 from app.dependencies import get_current_user
-from app.routers import cards, sightings, species, jobs, binders, sets, trades
+from app.routers import cards, sightings, species, jobs, binders, sets, trades, auth, settings as settings_router, activity as activity_router, users, version
+from app.routers.collection import router as collection_router
+from app import storage
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(sightings.router, prefix="/api", tags=["sightings"])
 app.include_router(species.router, prefix="/api", tags=["species"])
 app.include_router(jobs.router, prefix="/api", tags=["jobs"])
@@ -36,6 +39,11 @@ app.include_router(cards.router, prefix="/api", tags=["cards"])
 app.include_router(binders.router, prefix="/api", tags=["binders"])
 app.include_router(sets.router, prefix="/api", tags=["sets"])
 app.include_router(trades.router, prefix="/api", tags=["trades"])
+app.include_router(settings_router.router, prefix="/api", tags=["settings"])
+app.include_router(activity_router.router, prefix="/api", tags=["activity"])
+app.include_router(collection_router, prefix="/api", tags=["collection"])
+app.include_router(users.router, prefix="/api", tags=["users"])
+app.include_router(version.router, prefix="/api", tags=["version"])
 
 # Warn if running without authentication
 if not settings.parsed_api_keys and not settings.cf_access_enabled:
@@ -51,9 +59,10 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/api/me")
-async def me(user: str = Depends(get_current_user)):
-    return {"user": user}
+# Serve user-uploaded files (avatars, sightings photos, card art)
+storage_dir = storage.get_storage_path()
+if storage_dir.exists():
+    app.mount("/storage", StaticFiles(directory=storage_dir), name="storage")
 
 
 # Serve frontend static assets (SvelteKit adapter-static output)

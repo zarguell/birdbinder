@@ -10,6 +10,7 @@ class JobRead(BaseModel):
     status: str
     result: dict | None
     error: str | None
+    raw_response: str | None = None
     created_at: datetime | None
     completed_at: datetime | None
 

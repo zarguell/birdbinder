@@ -229,6 +229,36 @@ async def test_delete_card_not_found_returns_404(auth_client):
     assert response.status_code == 404
 
 
+async def test_delete_card_removes_from_binders(auth_client, db_session):
+    """DELETE /api/cards/{id} should also remove the card from any binders."""
+    card = _make_card(db_session)
+    await db_session.commit()
+
+    # Create a binder
+    resp = await auth_client.post("/api/binders", json={"name": "Test Binder"})
+    assert resp.status_code == 201
+    binder_id = resp.json()["id"]
+
+    # Add card to binder
+    resp = await auth_client.post(
+        f"/api/binders/{binder_id}/cards", json={"card_id": card.id}
+    )
+    assert resp.status_code == 201
+
+    # Delete the card
+    resp = await auth_client.delete(f"/api/cards/{card.id}")
+    assert resp.status_code == 204
+
+    # Binder should have 0 cards
+    resp = await auth_client.get(f"/api/binders/{binder_id}/cards")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 0
+
+    # Card should be gone
+    resp = await auth_client.get(f"/api/cards/{card.id}")
+    assert resp.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # Auth tests
 # ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.types import PaginatedList
+
 
 class SpeciesRead(BaseModel):
     species_code: str
@@ -11,8 +13,4 @@ class SpeciesRead(BaseModel):
     order: str | None = None
 
 
-class SpeciesSearchResult(BaseModel):
-    items: list[SpeciesRead]
-    total: int
-    limit: int
-    offset: int
+SpeciesSearchResult = PaginatedList[SpeciesRead]

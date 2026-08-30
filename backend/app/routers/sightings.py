@@ -1,17 +1,19 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.crud import get_owned_or_404, paginated_owned_list
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models.sighting import Sighting
-from app.models.job import Job
 from app.models.enums import PoseVariant
 from app.schemas.sighting import SightingRead, SightingList, SightingOverride
 from app.services.species import get_species_by_code
 from app import storage, image
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -30,16 +32,33 @@ async def create_sighting(
     file: UploadFile | None = File(default=None),
     notes: str | None = Form(default=None),
     location_display_name: str | None = Form(default=None),
+    # Client-side EXIF fallback (when browser strips EXIF before upload)
+    exif_datetime: str | None = Form(default=None),
+    exif_lat: float | None = Form(default=None),
+    exif_lon: float | None = Form(default=None),
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     sighting_id = str(uuid.uuid4())
     photo_path = None
     thumbnail_path = None
-    exif_datetime = None
-    exif_lat = None
-    exif_lon = None
+    exif_datetime_val = None
+    exif_lat_val = None
+    exif_lon_val = None
     exif_camera_model = None
+
+    # Parse client-sent EXIF as fallback
+    if exif_datetime:
+        try:
+            exif_datetime_val = datetime.strptime(exif_datetime, "%Y:%m:%d %H:%M:%S").replace(
+                tzinfo=timezone.utc
+            )
+        except (ValueError, TypeError):
+            pass
+    if exif_lat is not None:
+        exif_lat_val = exif_lat
+    if exif_lon is not None:
+        exif_lon_val = exif_lon
 
     if file and file.filename:
         # Determine extension from content type
@@ -48,22 +67,34 @@ async def create_sighting(
 
         file_content = await file.read()
         photo_path = storage.save_upload(file_content, sighting_id, extension)
-
-        # Extract EXIF from saved image
         abs_photo = storage.get_file_path(photo_path)
+
+        # Extract EXIF BEFORE any conversion (Pillow strips EXIF during save)
+        # Server-side extraction (may be empty if browser already stripped EXIF)
         exif = image.extract_exif(abs_photo)
         if exif:
             exif_camera_model = exif.get("camera_model")
-            exif_lat = exif.get("lat")
-            exif_lon = exif.get("lon")
+            if exif_lat_val is None:
+                exif_lat_val = exif.get("lat")
+            if exif_lon_val is None:
+                exif_lon_val = exif.get("lon")
             dt_str = exif.get("datetime")
-            if dt_str:
+            if dt_str and exif_datetime_val is None:
                 try:
-                    exif_datetime = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").replace(
+                    exif_datetime_val = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S").replace(
                         tzinfo=timezone.utc
                     )
                 except (ValueError, TypeError):
                     pass
+
+        # Convert HEIC/HEIF to JPEG if needed
+        if image.is_heif(abs_photo):
+            try:
+                abs_photo = image.convert_heif_to_jpeg(abs_photo)
+                photo_path = f"sightings/{sighting_id}.jpg"
+                logger.info("Converted HEIF to JPEG: %s", abs_photo)
+            except ValueError:
+                logger.warning("HEIF upload but pillow-heif not installed, identification may fail")
 
         # Generate thumbnail
         try:
@@ -79,9 +110,9 @@ async def create_sighting(
         user_identifier=user,
         photo_path=photo_path,
         thumbnail_path=thumbnail_path,
-        exif_datetime=exif_datetime,
-        exif_lat=exif_lat,
-        exif_lon=exif_lon,
+        exif_datetime=exif_datetime_val,
+        exif_lat=exif_lat_val,
+        exif_lon=exif_lon_val,
         exif_camera_model=exif_camera_model,
         location_display_name=location_display_name,
         notes=notes,
@@ -89,6 +120,16 @@ async def create_sighting(
     db.add(sighting)
     await db.commit()
     await db.refresh(sighting)
+
+    # Auto-trigger identification if photo was uploaded
+    if photo_path:
+        try:
+            from app.services.identifier import start_identification
+            job_id = await start_identification(sighting_id, db)
+            logger.info("Auto-triggered identification for sighting %s (job %s)", sighting_id, job_id)
+        except Exception as e:
+            logger.warning("Failed to auto-trigger identification for %s: %s", sighting_id, e)
+
     return sighting
 
 
@@ -100,21 +141,11 @@ async def list_sightings(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Sighting).where(Sighting.user_identifier == user)
-    count_query = select(func.count()).select_from(Sighting).where(Sighting.user_identifier == user)
-
+    filters = []
     if status_filter:
-        query = query.where(Sighting.status == status_filter)
-        count_query = count_query.where(Sighting.status == status_filter)
-
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    query = query.order_by(Sighting.submitted_at.desc()).offset(offset).limit(limit)
-    result = await db.execute(query)
-    sightings = result.scalars().all()
-
-    return SightingList(items=sightings, total=total, limit=limit, offset=offset)
+        filters.append(Sighting.status == status_filter)
+    items, total = await paginated_owned_list(db, Sighting, user, limit, offset, *filters, order_field="submitted_at")
+    return SightingList(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/sightings/{sighting_id}", response_model=SightingRead)
@@ -123,15 +154,7 @@ async def get_sighting(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
-        )
-    )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found")
-    return sighting
+    return await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
 
 
 @router.delete("/sightings/{sighting_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -140,14 +163,35 @@ async def delete_sighting(
     user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
+    sighting = await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
+
+    # Collect card IDs for activity and binder_card cleanup
+    card_ids = [c.id for c in sighting.cards]
+
+    # Delete binder_cards referencing these cards (DB FK cascade not enforced in SQLite)
+    if card_ids:
+        from app.models.binder import BinderCard
+        await db.execute(
+            BinderCard.__table__.delete().where(
+                BinderCard.card_id.in_(card_ids),
+            )
+        )
+
+    # Delete activities referencing this sighting and its cards
+    from app.models.activity import Activity
+    if card_ids:
+        await db.execute(
+            Activity.__table__.delete().where(
+                Activity.reference_id.in_(card_ids),
+                Activity.activity_type == "card",
+            )
+        )
+    await db.execute(
+        Activity.__table__.delete().where(
+            Activity.reference_id == sighting_id,
+            Activity.activity_type == "sighting",
         )
     )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found")
 
     await db.delete(sighting)
     await db.commit()
@@ -161,16 +205,7 @@ async def update_sighting(
     db: AsyncSession = Depends(get_db),
 ):
     """Manual species override or pose variant update for a sighting."""
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
-        )
-    )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Sighting not found"
-        )
+    sighting = await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
 
     if override.species_code is not None:
         species = get_species_by_code(override.species_code)
@@ -198,9 +233,52 @@ async def update_sighting(
             )
         sighting.pose_variant = override.pose_variant
 
+    if override.latitude is not None:
+        if not -90 <= override.latitude <= 90:
+            raise HTTPException(status_code=422, detail="Latitude must be between -90 and 90")
+        sighting.exif_lat = override.latitude
+
+    if override.longitude is not None:
+        if not -180 <= override.longitude <= 180:
+            raise HTTPException(status_code=422, detail="Longitude must be between -180 and 180")
+        sighting.exif_lon = override.longitude
+
+    if override.location_display_name is not None:
+        sighting.location_display_name = override.location_display_name
+
     await db.commit()
     await db.refresh(sighting)
     return sighting
+
+
+@router.get("/sightings/{sighting_id}/job")
+async def get_sighting_job(
+    sighting_id: str,
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the latest job status for a sighting (for polling identification progress)."""
+    result = await db.execute(
+        select(Job)
+        .where(Job.sighting_id == sighting_id, Job.type == "identify")
+        .order_by(Job.created_at.desc())
+        .limit(1)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        return {"job": None}
+    return {
+        "job": {
+            "id": job.id,
+            "type": job.type,
+            "status": job.status,
+            "error": job.error,
+            "result": job.result,
+            "raw_response": job.raw_response,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        }
+    }
 
 
 @router.post("/sightings/{sighting_id}/identify")
@@ -211,15 +289,7 @@ async def identify_sighting(
 ):
     from app.services.identifier import start_identification
 
-    # Verify ownership
-    result = await db.execute(
-        select(Sighting).where(
-            Sighting.id == sighting_id, Sighting.user_identifier == user
-        )
-    )
-    sighting = result.scalar_one_or_none()
-    if not sighting:
-        raise HTTPException(status_code=404, detail="Sighting not found")
+    sighting = await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
     try:
         job_id = await start_identification(sighting_id, db)
         return {"job_id": job_id, "status": "pending"}

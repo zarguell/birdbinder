@@ -22,6 +22,7 @@ class SightingStatus(str, enum.Enum):
 class JobType(str, enum.Enum):
     identify = "identify"
     generate_card = "generate_card"
+    regenerate_art = "regenerate_art"
 
 
 class JobStatus(str, enum.Enum):

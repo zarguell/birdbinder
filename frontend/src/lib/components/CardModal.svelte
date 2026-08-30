@@ -9,13 +9,16 @@
 	let addError = $state('');
 	let addSuccess = $state('');
 	let flipped = $state(false);
+	let confirmDelete = $state(false);
+	let deleteTimer: ReturnType<typeof setTimeout> | null = null;
+	let deleting = $state(false);
 
-	const rarityConfig: Record<string, { bg: string; text: string; label: string }> = {
-		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common' },
-		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon' },
-		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare' },
-		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic' },
-		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary' }
+	const rarityConfig: Record<string, { bg: string; text: string; label: string; border: string; glow: string }> = {
+		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common', border: 'border-gray-500/50', glow: '' },
+		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon', border: 'border-green-500/60', glow: 'shadow-green-500/10' },
+		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare', border: 'border-blue-400/60', glow: 'shadow-blue-500/15' },
+		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic', border: 'border-purple-400/60', glow: 'shadow-purple-500/15' },
+		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary', border: 'border-amber-400/70', glow: 'shadow-amber-400/20' }
 	};
 
 	function getRarity(tier: string) {
@@ -78,6 +81,32 @@
 		if (e.key === 'Escape') onClose();
 	}
 
+	function handleDeleteClick() {
+		if (confirmDelete) {
+			deleteCard();
+		} else {
+			confirmDelete = true;
+			deleteTimer = setTimeout(() => { confirmDelete = false; deleteTimer = null; }, 3000);
+		}
+	}
+
+	async function deleteCard() {
+		deleting = true;
+		try {
+			await cards.delete(card.id);
+			onClose();
+		} catch (err) {
+			console.error('Failed to delete card:', err);
+			deleting = false;
+		}
+	}
+
+	function cancelDelete() {
+		if (deleteTimer) clearTimeout(deleteTimer);
+		deleteTimer = null;
+		confirmDelete = false;
+	}
+
 	$effect(() => {
 		if (card) {
 			loadBinders();
@@ -85,6 +114,8 @@
 			addSuccess = '';
 			selectedBinderId = '';
 			flipped = false;
+			confirmDelete = false;
+			deleting = false;
 			// Focus trap
 			document.addEventListener('keydown', handleKeydown);
 		}
@@ -118,22 +149,22 @@
 			{#if !flipped}
 				<!-- FRONT VIEW -->
 				<div class="flex flex-col sm:flex-row">
-					<!-- Card Art -->
-					<div class="relative aspect-[3/4] w-full shrink-0 overflow-hidden bg-gray-800 sm:w-48 sm:aspect-auto sm:min-h-64">
-						{#if card.card_art_url}
-							<img
-								src={card.card_art_url}
-								alt={card.species_common ?? 'Card'}
-								class="h-full w-full object-cover"
-							/>
-						{:else}
-							<div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-800 via-gray-750 to-gray-900">
-								<svg class="h-16 w-16 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-								</svg>
-							</div>
-						{/if}
-					</div>
+				<!-- Card Art -->
+				<div class="holo-shimmer relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-lg border-2 {rarity.border} {rarity.glow} shadow-lg bg-gray-800 sm:w-48 sm:aspect-auto sm:min-h-64">
+					{#if card.card_art_url}
+						<img
+							src={card.card_art_url}
+							alt={card.species_common ?? 'Card'}
+							class="h-full w-full object-cover"
+						/>
+					{:else}
+						<div class="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-800 via-gray-750 to-gray-900">
+							<svg class="h-16 w-16 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+							</svg>
+						</div>
+					{/if}
+				</div>
 
 					<!-- Card Details -->
 					<div class="flex-1 space-y-4 p-5">
@@ -184,6 +215,12 @@
 								<div class="flex justify-between">
 									<dt class="text-gray-500">Generated</dt>
 									<dd class="text-gray-200">{formatDate(card.generated_at)}</dd>
+								</div>
+							{/if}
+							{#if card.art_model}
+								<div class="flex justify-between">
+									<dt class="text-gray-500">Art Model</dt>
+									<dd class="text-gray-400 font-mono text-xs">{card.art_model}</dd>
 								</div>
 							{/if}
 							{#if card.set_ids?.length}
@@ -238,13 +275,44 @@
 								{#if addError}
 									<p class="text-xs text-red-400">{addError}</p>
 								{/if}
-								{#if addSuccess}
-									<p class="text-xs text-green-400">{addSuccess}</p>
-								{/if}
-							</div>
-						{/if}
+							{#if addSuccess}
+								<p class="text-xs text-green-400">{addSuccess}</p>
+							{/if}
+						</div>
+					{/if}
+					<!-- Delete Card -->
+						<div class="border-t border-gray-800 pt-4">
+							{#if !confirmDelete}
+								<button
+									type="button"
+									onclick={handleDeleteClick}
+									class="w-full rounded-lg border border-red-800/50 bg-red-900/20 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/40 hover:text-red-300"
+								>
+									Delete Card
+								</button>
+							{:else}
+								<p class="mb-2 text-xs text-red-400">Are you sure? This cannot be undone.</p>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										onclick={cancelDelete}
+										class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-700"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										onclick={handleDeleteClick}
+										disabled={deleting}
+										class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+									>
+										{#if deleting}Deleting...{:else}Yes, Delete{/if}
+									</button>
+								</div>
+							{/if}
 					</div>
 				</div>
+			</div>
 			{:else}
 				<!-- CARD BACK VIEW -->
 				<div class="p-6 space-y-5">
@@ -334,6 +402,19 @@
 				</div>
 			{/if}
 
+			<!-- Bottom Buttons -->
+			<div class="absolute bottom-3 left-3 z-10 flex items-center gap-2">
+				<a
+					href="/cards/{card.id}"
+					class="flex h-9 items-center gap-1.5 rounded-full bg-green-600/80 px-3 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-green-500"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+					</svg>
+					View Full Card
+				</a>
+			</div>
+
 			<!-- Flip Card Button (bottom-right) -->
 			<button
 				type="button"
@@ -348,3 +429,29 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.holo-shimmer::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		pointer-events: none;
+		background: linear-gradient(
+			115deg,
+			transparent 20%,
+			rgba(255, 255, 255, 0.06) 36%,
+			rgba(255, 255, 255, 0.12) 40%,
+			rgba(255, 255, 255, 0.06) 44%,
+			transparent 60%
+		);
+		background-size: 200% 100%;
+		animation: holo-sweep 3s ease-in-out infinite;
+		mix-blend-mode: overlay;
+	}
+
+	@keyframes holo-sweep {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+</style>

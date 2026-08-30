@@ -1,6 +1,9 @@
 from pydantic import BaseModel
 from datetime import datetime
 
+from app.schemas.sighting import SightingInfo, SightingRead
+from app.types import PaginatedList
+
 
 class CardRead(BaseModel):
     id: str
@@ -17,15 +20,16 @@ class CardRead(BaseModel):
     card_art_url: str | None
     id_method: str
     id_confidence: float | None
+    art_model: str | None = None
     duplicate_count: int
     tradeable: bool
     generated_at: datetime | None
+    sighting: SightingInfo | None = None
 
     model_config = {"from_attributes": True}
 
 
-class CardList(BaseModel):
-    items: list[CardRead]
-    total: int
-    limit: int
-    offset: int
+CardList = PaginatedList[CardRead]
+
+# Resolve the forward reference "CardRead" in SightingRead.cards
+SightingRead.model_rebuild(_types_namespace={"CardRead": CardRead})

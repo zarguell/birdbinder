@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { sightings, cards, ApiError } from '$lib/api';
+	import { sightings, cards, jobs, ApiError } from '$lib/api';
 	import SpeciesAutocomplete from '$lib/components/SpeciesAutocomplete.svelte';
+	import SpeciesSelector from '$lib/components/SpeciesSelector.svelte';
 
 	let sighting = $state<any>(null);
 	let loading = $state(true);
@@ -13,8 +14,49 @@
 	let showDeleteConfirm = $state(false);
 	let actionMessage = $state('');
 	let actionMessageType: 'success' | 'error' = $state('success');
+	let jobStatus = $state<any>(null);
+	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	let editingLocation = $state(false);
+	let editLat = $state(0);
+	let editLon = $state(0);
+	let editDisplayName = $state('');
+	let locationError = $state('');
+	let showSpeciesSelector = $state(false);
+	let regenCardIds = $state<Set<string>>(new Set());
 
 	let id = $derived($page.params.id);
+
+	function startPolling() {
+		stopPolling();
+		pollInterval = setInterval(async () => {
+			try {
+				const res = await sightings.getJob(id);
+				jobStatus = res.job;
+				if (jobStatus && (jobStatus.status === 'completed' || jobStatus.status === 'failed')) {
+					stopPolling();
+					identifying = false;
+					await loadSighting();
+					if (jobStatus.status === 'failed') {
+						let msg = `Identification failed: ${jobStatus.error || 'Unknown error'}`;
+						if (jobStatus.raw_response) {
+							msg += `\n\nAI response:\n${jobStatus.raw_response}`;
+						}
+						actionMessage = msg;
+						actionMessageType = 'error';
+					} else if (jobStatus.status === 'completed') {
+						actionMessage = '';
+					}
+				}
+			} catch { /* ignore poll errors */ }
+		}, 2000);
+	}
+
+	function stopPolling() {
+		if (pollInterval) {
+			clearInterval(pollInterval);
+			pollInterval = null;
+		}
+	}
 
 	async function loadSighting() {
 		loading = true;
@@ -22,6 +64,13 @@
 		sighting = null;
 		try {
 			sighting = await sightings.get(id);
+			// Start polling if identification is in progress
+			if (sighting.identification_status === 'pending' || sighting.identification_status === 'running') {
+				startPolling();
+			} else {
+				stopPolling();
+				jobStatus = null;
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load sighting';
 		} finally {
@@ -31,6 +80,7 @@
 
 	$effect(() => {
 		if (id) loadSighting();
+		return () => stopPolling();
 	});
 
 	function formatDate(dateStr: string): string {
@@ -55,20 +105,20 @@
 		const minutes = Math.floor((abs - degrees) * 60);
 		return `${degrees}° ${minutes}' ${val >= 0 ? dir : 'S' === dir ? 'S' : 'W'}`;
 	}
-
-	async function handleIdentify() {
+async function handleIdentify() {
+		if (identifying) return;
 		identifying = true;
 		actionMessage = '';
+		jobStatus = null;
 		try {
-			await cards.generate(id);
-			actionMessage = 'Identification started! Card generation in progress…';
-			actionMessageType = 'success';
-			// Reload after a short delay to pick up status changes
-			setTimeout(() => loadSighting(), 3000);
+			const res = await fetch(`/api/sightings/${id}/identify`, { method: 'POST' });
+			if (!res.ok) throw new ApiError(res.status, await res.text());
+			// Reload to pick up pending status, then start polling
+			await loadSighting();
+			startPolling();
 		} catch (err) {
 			actionMessage = err instanceof Error ? err.message : 'Identification failed';
 			actionMessageType = 'error';
-		} finally {
 			identifying = false;
 		}
 	}
@@ -103,6 +153,39 @@
 		}
 	}
 
+	function startEditLocation() {
+		editLat = sighting.latitude ?? sighting.exif_lat ?? 0;
+		editLon = sighting.longitude ?? sighting.exif_lon ?? 0;
+		editDisplayName = sighting.location_display_name ?? '';
+		locationError = '';
+		editingLocation = true;
+	}
+
+	async function saveLocation() {
+		locationError = '';
+		if (editLat < -90 || editLat > 90) {
+			locationError = 'Latitude must be between -90 and 90';
+			return;
+		}
+		if (editLon < -180 || editLon > 180) {
+			locationError = 'Longitude must be between -180 and 180';
+			return;
+		}
+		try {
+			const updated = await sightings.update(sighting.id, {
+				latitude: editLat,
+				longitude: editLon,
+				location_display_name: editDisplayName || null,
+			});
+			Object.assign(sighting, updated);
+			editingLocation = false;
+			actionMessage = 'Location updated';
+			actionMessageType = 'success';
+		} catch (e) {
+			locationError = e instanceof Error ? e.message : 'Failed to update location';
+		}
+	}
+
 	async function handleOverride(code: string, commonName: string) {
 		actionMessage = '';
 		try {
@@ -111,6 +194,43 @@
 			actionMessageType = 'success';
 		} catch (err) {
 			actionMessage = err instanceof Error ? err.message : 'Failed to override species';
+			actionMessageType = 'error';
+		}
+	}
+
+	async function overrideSpecies(species: any) {
+		actionMessage = '';
+		try {
+			sighting = await sightings.overrideSpecies(id, species.species_code, species.common_name);
+			showSpeciesSelector = false;
+			actionMessage = `Species updated to ${species.common_name}`;
+			actionMessageType = 'success';
+		} catch (err) {
+			actionMessage = err instanceof Error ? err.message : 'Failed to override species';
+			actionMessageType = 'error';
+		}
+	}
+
+	async function handleRegenCard(cardId: string) {
+		if (!confirm('Regenerate art for this card?')) return;
+		regenCardIds.add(cardId);
+		try {
+			const res = await cards.regenerateArt(cardId);
+			const pollInterval = setInterval(async () => {
+				try {
+					const job = await jobs.get(res.job_id);
+					if (job.status === 'completed' || job.status === 'failed') {
+						clearInterval(pollInterval);
+						regenCardIds.delete(cardId);
+						if (job.status === 'completed') {
+							await loadSighting();
+						}
+					}
+				} catch { /* ignore poll errors */ }
+			}, 2000);
+		} catch (err) {
+			regenCardIds.delete(cardId);
+			actionMessage = err instanceof Error ? err.message : 'Failed to start regeneration';
 			actionMessageType = 'error';
 		}
 	}
@@ -183,7 +303,15 @@
 								: sighting.identification_status === 'failed'
 									? 'bg-red-500/15 text-red-400 border-red-500/30'
 									: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'}">
-							{sighting.identification_status ?? 'pending'}
+							{#if sighting.identification_status === 'pending' || sighting.identification_status === 'running'}
+								<svg class="inline -mt-0.5 mr-1 h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+								</svg>
+								{sighting.identification_status === 'running' ? 'Identifying…' : 'Queued'}
+							{:else}
+								{sighting.identification_status ?? 'pending'}
+							{/if}
 						</span>
 						{#if sighting.id_method}
 							<span class="ml-2 text-xs text-gray-500">
@@ -195,50 +323,117 @@
 								{sighting.id_confidence}% confidence
 							</span>
 						{/if}
+						{#if sighting.id_model}
+							<span class="ml-2 text-xs text-gray-600 font-mono">
+								{sighting.id_model}
+							</span>
+						{/if}
 					</div>
 				</div>
 
-				<!-- EXIF / Location Data -->
-				<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-					<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Details</h2>
-					<dl class="space-y-2 text-sm">
-						<div class="flex justify-between">
-							<dt class="text-gray-500">Date</dt>
-							<dd class="text-gray-200 text-right">
-								{sighting.observed_at ? formatDate(sighting.observed_at) : formatDate(sighting.created_at)}
-							</dd>
-						</div>
-						<div class="flex justify-between">
-							<dt class="text-gray-500">Latitude</dt>
-							<dd class="text-gray-200 font-mono text-right">
-								{sighting.latitude != null ? sighting.latitude.toFixed(5) : '—'}
-							</dd>
-						</div>
-						<div class="flex justify-between">
-							<dt class="text-gray-500">Longitude</dt>
-							<dd class="text-gray-200 font-mono text-right">
-								{sighting.longitude != null ? sighting.longitude.toFixed(5) : '—'}
-							</dd>
-						</div>
-					</dl>
+			<!-- Details -->
+			<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
+				<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Details</h2>
+				<dl class="space-y-2 text-sm">
+					<div class="flex justify-between">
+						<dt class="text-gray-500">Date</dt>
+						<dd class="text-gray-200 text-right">
+							{sighting.observed_at ? formatDate(sighting.observed_at) : formatDate(sighting.created_at)}
+						</dd>
+					</div>
+				</dl>
+			</div>
+
+			<!-- Location -->
+			<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
+				<div class="flex items-center justify-between">
+					<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Location</h2>
+					{#if !editingLocation}
+						<button
+							onclick={startEditLocation}
+							class="text-xs text-green-400 hover:text-green-300 font-medium transition-colors"
+						>
+							Edit
+						</button>
+					{/if}
 				</div>
+				{#if editingLocation}
+					<div class="space-y-2">
+						<div class="grid grid-cols-2 gap-2">
+							<div>
+								<label class="text-xs text-gray-500">Latitude</label>
+								<input type="number" step="any" min="-90" max="90" bind:value={editLat}
+									class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200" />
+							</div>
+							<div>
+								<label class="text-xs text-gray-500">Longitude</label>
+								<input type="number" step="any" min="-180" max="180" bind:value={editLon}
+									class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200" />
+							</div>
+						</div>
+						<div>
+							<label class="text-xs text-gray-500">Location Name</label>
+							<input type="text" bind:value={editDisplayName} placeholder="e.g., Central Park, NY"
+								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200" />
+						</div>
+						{#if locationError}
+							<p class="text-xs text-red-400">{locationError}</p>
+						{/if}
+						<div class="flex gap-2">
+							<button onclick={saveLocation} class="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-500">Save</button>
+							<button onclick={() => editingLocation = false} class="rounded-lg border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-800">Cancel</button>
+						</div>
+					</div>
+				{:else}
+					{#if sighting.latitude != null && sighting.longitude != null}
+						<dl class="space-y-2 text-sm">
+							<div class="flex justify-between">
+								<dt class="text-gray-500">Latitude</dt>
+								<dd class="text-gray-200 font-mono text-right">{sighting.latitude.toFixed(5)}</dd>
+							</div>
+							<div class="flex justify-between">
+								<dt class="text-gray-500">Longitude</dt>
+								<dd class="text-gray-200 font-mono text-right">{sighting.longitude.toFixed(5)}</dd>
+							</div>
+							{#if sighting.location_display_name}
+								<div class="flex justify-between">
+									<dt class="text-gray-500">Name</dt>
+									<dd class="text-gray-200 text-right">{sighting.location_display_name}</dd>
+								</div>
+							{/if}
+						</dl>
+					{:else}
+						<p class="text-sm text-gray-500 italic">No location</p>
+					{/if}
+				{/if}
+			</div>
 
 				<!-- Action Buttons -->
 				<div class="space-y-2.5">
-					{#if sighting.identification_status === 'pending'}
-						<button
-							onclick={handleIdentify}
-							disabled={identifying}
-							class="w-full flex items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
-						>
-							{#if identifying}
-								<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-								</svg>
-							{/if}
-							Identify Bird
-						</button>
+				{#if sighting.identification_status === 'pending'}
+					<button
+						disabled={true}
+						class="w-full flex items-center justify-center gap-2 rounded-lg bg-yellow-600 py-2.5 text-sm font-semibold text-white opacity-50 cursor-not-allowed"
+					>
+						<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+						</svg>
+						Queued…
+					</button>
+					{/if}
+
+					{#if sighting.identification_status === 'running'}
+					<button
+						disabled={true}
+						class="w-full flex items-center justify-center gap-2 rounded-lg bg-yellow-600 py-2.5 text-sm font-semibold text-white opacity-50 cursor-not-allowed"
+					>
+						<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+						</svg>
+						Identifying…
+					</button>
 					{/if}
 
 					{#if sighting.identification_status === 'failed'}
@@ -276,9 +471,30 @@
 
 				<!-- Manual Override -->
 				<div class="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-					<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Manual Override</h2>
-					<SpeciesAutocomplete onSelect={handleOverride} />
-					<p class="text-xs text-gray-600">Type to search and override the species identification.</p>
+					<div class="flex items-center justify-between">
+						<h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Manual Override</h2>
+						{#if !showSpeciesSelector}
+							<button
+								onclick={() => showSpeciesSelector = true}
+								class="text-xs text-green-400 hover:text-green-300 font-medium transition-colors"
+							>
+								Change Species
+							</button>
+						{:else}
+							<button
+								onclick={() => showSpeciesSelector = false}
+								class="text-xs text-gray-500 hover:text-gray-400 font-medium transition-colors"
+							>
+								Cancel
+							</button>
+						{/if}
+					</div>
+					{#if showSpeciesSelector}
+						<SpeciesSelector placeholder="Search species..." onselect={overrideSpecies} />
+						<p class="text-xs text-gray-600">Type to search and select a species. Results are grouped by family.</p>
+					{:else}
+						<p class="text-xs text-gray-600">Override the species identification with a manual selection.</p>
+					{/if}
 				</div>
 
 				<!-- Delete -->
@@ -320,14 +536,14 @@
 			</div>
 		</div>
 
-		<!-- Action Message -->
-		{#if actionMessage}
-			<div class="rounded-xl border p-4 {actionMessageType === 'error'
-				? 'border-red-500/30 bg-red-500/10'
-				: 'border-green-500/30 bg-green-500/10'}">
-				<p class="text-sm {actionMessageType === 'error' ? 'text-red-300' : 'text-green-300'}">{actionMessage}</p>
-			</div>
-		{/if}
+	<!-- Action Message -->
+	{#if actionMessage}
+		<div class="rounded-xl border p-4 {actionMessageType === 'error'
+			? 'border-red-500/30 bg-red-500/10'
+			: 'border-green-500/30 bg-green-500/10'}">
+			<p class="text-sm whitespace-pre-wrap {actionMessageType === 'error' ? 'text-red-300' : 'text-green-300'}">{actionMessage}</p>
+		</div>
+	{/if}
 
 		<!-- Cards Section -->
 		{#if sighting.cards && sighting.cards.length > 0}
@@ -335,13 +551,13 @@
 				<h2 class="text-lg font-semibold">Cards</h2>
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{#each sighting.cards as card}
-						<a
-							href="/cards/{card.id}"
-							class="rounded-xl border border-gray-800 bg-gray-900/50 overflow-hidden transition-colors hover:border-gray-700 hover:bg-gray-900"
-						>
-							{#if card.art_url}
+					<a
+						href="/cards/{card.id}"
+						class="holo-shimmer rounded-xl border-2 border-gray-700/50 bg-gray-900/50 overflow-hidden transition-all hover:border-gray-500 hover:bg-gray-900 hover:shadow-lg hover:shadow-black/20"
+					>
+							{#if card.card_art_url}
 								<img
-									src={card.art_url}
+									src={card.card_art_url}
 									alt={card.species_common ?? 'Card'}
 									class="w-full aspect-[2.5/3.5] object-cover bg-gray-800"
 									loading="lazy"
@@ -356,20 +572,30 @@
 							<div class="p-3 flex items-center justify-between">
 								<div class="min-w-0">
 									<p class="text-sm font-medium truncate">{card.species_common ?? 'Card'}</p>
-									{#if card.rarity}
+									{#if card.rarity_tier}
 										<span class="text-xs font-medium
-											{card.rarity === 'common' ? 'text-gray-400' :
-											 card.rarity === 'uncommon' ? 'text-green-400' :
-											 card.rarity === 'rare' ? 'text-blue-400' :
-											 card.rarity === 'epic' ? 'text-purple-400' :
+											{card.rarity_tier === 'common' ? 'text-gray-400' :
+											 card.rarity_tier === 'uncommon' ? 'text-green-400' :
+											 card.rarity_tier === 'rare' ? 'text-blue-400' :
+											 card.rarity_tier === 'epic' ? 'text-purple-400' :
 											 'text-yellow-400'}">
-											{card.rarity}
+											{card.rarity_tier}
 										</span>
 									{/if}
+									{#if regenCardIds.has(card.id)}
+										<span class="text-xs text-yellow-400 ml-1">Regenerating...</span>
+									{/if}
 								</div>
-								<svg class="w-4 h-4 text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-								</svg>
+								<button
+									onclick={(e) => { e.preventDefault(); e.stopPropagation(); handleRegenCard(card.id); }}
+									disabled={regenCardIds.has(card.id)}
+									class="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									title="Regenerate art"
+								>
+									<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+									</svg>
+								</button>
 							</div>
 						</a>
 					{/each}
@@ -378,3 +604,29 @@
 		{/if}
 	{/if}
 </div>
+
+<style>
+	.holo-shimmer::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		pointer-events: none;
+		background: linear-gradient(
+			115deg,
+			transparent 20%,
+			rgba(255, 255, 255, 0.06) 36%,
+			rgba(255, 255, 255, 0.12) 40%,
+			rgba(255, 255, 255, 0.06) 44%,
+			transparent 60%
+		);
+		background-size: 200% 100%;
+		animation: holo-sweep 3s ease-in-out infinite;
+		mix-blend-mode: overlay;
+	}
+
+	@keyframes holo-sweep {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+</style>

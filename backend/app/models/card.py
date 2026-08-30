@@ -15,7 +15,7 @@ class Card(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     sighting_id: Mapped[uuid.UUID | None] = mapped_column(
-        String(36), ForeignKey("sightings.id"), nullable=True
+        String(36), ForeignKey("sightings.id", ondelete="CASCADE"), nullable=True
     )
     user_identifier: Mapped[str] = mapped_column(String(255), index=True)
     species_common: Mapped[str] = mapped_column(String(255), index=True)
@@ -31,6 +31,7 @@ class Card(Base):
     card_art_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     id_method: Mapped[str] = mapped_column(String(20), default="ai")
     id_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    art_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     duplicate_count: Mapped[int] = mapped_column(Integer, default=1)
     tradeable: Mapped[bool] = mapped_column(Boolean, default=True)
     generated_at: Mapped[datetime] = mapped_column(

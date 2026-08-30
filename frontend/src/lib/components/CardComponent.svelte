@@ -1,12 +1,12 @@
 <script lang="ts">
 	let { card, onselect }: { card: any; onselect?: (card: any) => void } = $props();
 
-	const rarityConfig: Record<string, { bg: string; text: string; label: string }> = {
-		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common' },
-		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon' },
-		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare' },
-		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic' },
-		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary' }
+	const rarityConfig: Record<string, { bg: string; text: string; label: string; border: string; glow: string }> = {
+		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common', border: 'border-gray-500/50', glow: '' },
+		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon', border: 'border-green-500/60', glow: 'hover:shadow-green-500/20' },
+		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare', border: 'border-blue-400/60', glow: 'hover:shadow-blue-500/25' },
+		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic', border: 'border-purple-400/60', glow: 'hover:shadow-purple-500/25' },
+		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary', border: 'border-amber-400/70', glow: 'hover:shadow-amber-400/30' }
 	};
 
 	function getRarity(tier: string) {
@@ -18,9 +18,12 @@
 
 <button
 	type="button"
-	class="group relative flex flex-col overflow-hidden rounded-xl border border-gray-800 bg-gray-900/80 transition-all duration-200 hover:scale-[1.03] hover:border-gray-600 hover:shadow-lg hover:shadow-black/30 focus:outline-none focus:ring-2 focus:ring-green-500/50"
+	class="group relative flex flex-col overflow-hidden rounded-xl border-2 {rarity.border} bg-gray-900/80 transition-all duration-200 hover:scale-[1.03] hover:shadow-xl hover:shadow-black/30 {rarity.glow} focus:outline-none focus:ring-2 focus:ring-green-500/50"
 	onclick={() => onselect?.(card)}
 >
+	<!-- Holographic shimmer overlay -->
+	<div class="holo-shimmer pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
+
 	<!-- Card Art -->
 	<div class="relative aspect-[3/4] w-full overflow-hidden bg-gray-800">
 		{#if card.card_art_url}
@@ -39,27 +42,27 @@
 		{/if}
 
 		<!-- Rarity Badge (top-left) -->
-		<span class="absolute left-2 top-2 rounded-full px-2 py-0.5 text-xs font-semibold {rarity.bg} {rarity.text}">
+		<span class="absolute left-2 top-2 z-20 rounded-full px-2 py-0.5 text-xs font-semibold {rarity.bg} {rarity.text}">
 			{rarity.label}
 		</span>
 
 		<!-- Pose Label (top-right) -->
 		{#if card.pose_variant}
-			<span class="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-gray-300 backdrop-blur-sm">
+			<span class="absolute right-2 top-2 z-20 rounded-full bg-black/60 px-2 py-0.5 text-xs text-gray-300 backdrop-blur-sm">
 				{card.pose_variant}
 			</span>
 		{/if}
 
 		<!-- Duplicate Count (bottom-right) -->
 		{#if card.duplicate_count > 1}
-			<span class="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-green-600 text-xs font-bold text-white shadow-lg">
+			<span class="absolute bottom-2 right-2 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-green-600 text-xs font-bold text-white shadow-lg">
 				×{card.duplicate_count}
 			</span>
 		{/if}
 	</div>
 
-	<!-- Card Info -->
-	<div class="flex flex-col gap-0.5 p-2.5">
+	<!-- Card Info Bar -->
+	<div class="relative z-20 flex flex-col gap-0.5 border-t border-gray-800 bg-gray-900/90 p-2.5">
 		<p class="truncate text-sm font-medium text-gray-100">
 			{card.species_common ?? 'Unknown'}
 		</p>
@@ -68,3 +71,24 @@
 		{/if}
 	</div>
 </button>
+
+<style>
+	.holo-shimmer {
+		background: linear-gradient(
+			115deg,
+			transparent 20%,
+			rgba(255, 255, 255, 0.08) 36%,
+			rgba(255, 255, 255, 0.15) 40%,
+			rgba(255, 255, 255, 0.08) 44%,
+			transparent 60%
+		);
+		background-size: 200% 100%;
+		animation: holo-sweep 2s ease-in-out infinite;
+		mix-blend-mode: overlay;
+	}
+
+	@keyframes holo-sweep {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+</style>

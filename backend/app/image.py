@@ -2,6 +2,58 @@ from PIL import Image, ExifTags
 from pathlib import Path
 import io
 
+# Register HEIF/HEIC support if pillow-heif is installed
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    HEIF_SUPPORT = True
+except ImportError:
+    HEIF_SUPPORT = False
+
+
+HEIF_EXTENSIONS = frozenset({".heic", ".heif"})
+
+
+def is_heif(path: Path | str) -> bool:
+    """Check if file is a HEIF/HEIC image."""
+    return Path(path).suffix.lower() in HEIF_EXTENSIONS
+
+
+def convert_heif_to_jpeg(source_path: Path, dest_path: Path | None = None, quality: int = 90) -> Path:
+    """Convert a HEIF/HEIC image to JPEG.
+
+    Returns path to the JPEG file (overwrites source if dest_path is None).
+    Raises ValueError if pillow-heif is not available.
+    """
+    if not HEIF_SUPPORT:
+        raise ValueError(
+            "HEIF/HEIC support requires pillow-heif. "
+            "Install with: pip install pillow-heif"
+        )
+
+    if dest_path is None:
+        dest_path = source_path.with_suffix(".jpg")
+
+    img = Image.open(source_path)
+    # Convert to RGB if necessary (HEIF may be in other color spaces)
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(dest_path, format="JPEG", quality=quality)
+
+    # If we wrote to a different file, remove the original
+    if dest_path != source_path:
+        source_path.unlink()
+
+    return dest_path
+
+
+def normalize_image(source_path: Path) -> Path:
+    """Convert HEIF to JPEG if needed. Returns the (possibly new) path."""
+    if is_heif(source_path) and HEIF_SUPPORT:
+        return convert_heif_to_jpeg(source_path)
+    return source_path
+
 
 def extract_exif(image_path: Path) -> dict:
     """Extract EXIF metadata from an image file.
@@ -10,7 +62,9 @@ def extract_exif(image_path: Path) -> dict:
     """
     result = {"datetime": None, "lat": None, "lon": None, "camera_model": None}
     try:
-        img = Image.open(image_path)
+        # Normalize HEIF first
+        img_path = normalize_image(image_path)
+        img = Image.open(img_path)
         exif_data = img.getexif()
         if not exif_data:
             return result
@@ -69,7 +123,9 @@ def _convert_gps_coord(coord, ref):
 def generate_thumbnail(source_path: Path, thumb_path: Path, size: tuple = (300, 300)) -> Path:
     """Generate a thumbnail image. Returns path to thumbnail."""
     thumb_path.parent.mkdir(parents=True, exist_ok=True)
-    img = Image.open(source_path)
+    # Normalize HEIF first
+    img_path = normalize_image(source_path)
+    img = Image.open(img_path)
     img.thumbnail(size)
     img.save(thumb_path, format="JPEG", quality=85)
     return thumb_path

@@ -143,7 +143,7 @@
 						<div class="flex items-center gap-2">
 							<p class="font-medium truncate">
 								{#if sighting.species_common}
-									{species_common}
+									{sighting.species_common}
 								{:else}
 									<span class="text-gray-500 italic">Unidentified</span>
 								{/if}
