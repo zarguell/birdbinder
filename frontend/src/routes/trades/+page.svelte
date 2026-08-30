@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { trades, cards, users, ApiError } from '$lib/api';
+	import { trades, cards, users, auth, ApiError } from '$lib/api';
 
 	let allTrades = $state<any[]>([]);
 	let tradeableCards = $state<any[]>([]);
@@ -9,6 +9,9 @@
 	let activeTab = $state<'incoming' | 'outgoing' | 'all'>('incoming');
 	let statusFilter = $state('');
 	let showCreateForm = $state(false);
+
+	// Current user identifier — needed to distinguish incoming vs outgoing trades
+	let myIdentifier = $state('');
 
 	// Create trade form
 	let formRecipient = $state('');
@@ -90,9 +93,9 @@
 	function filteredTrades() {
 		let list = allTrades;
 		if (activeTab === 'incoming') {
-			list = list.filter((t) => t.status === 'pending');
+			list = list.filter((t) => t.offered_to === myIdentifier);
 		} else if (activeTab === 'outgoing') {
-			list = list.filter((t) => t.offered_by === 'self' || t.status === 'pending');
+			list = list.filter((t) => t.offered_by === myIdentifier);
 		}
 		if (statusFilter) {
 			list = list.filter((t) => t.status === statusFilter);
@@ -186,7 +189,16 @@
 	}
 
 	$effect(() => {
-		loadTrades();
+		(async () => {
+			try {
+				const me = await auth.me();
+				myIdentifier = me.user_identifier;
+			} catch {
+				// If identity is unknown, direction-based tabs will show empty
+				// rather than mislabeling trades — errors surface via loadTrades
+			}
+			await loadTrades();
+		})();
 		loadTradeableCards();
 		loadUsers();
 
@@ -425,7 +437,7 @@
 				</div>
 				<p class="text-sm font-medium text-gray-400">No trades found</p>
 				<p class="mt-1 text-xs text-gray-600">
-					{activeTab === 'incoming' ? 'No pending incoming trades' : activeTab === 'outgoing' ? 'No outgoing trades' : 'No trades match your filters'}
+					{activeTab === 'incoming' ? 'No incoming trades' : activeTab === 'outgoing' ? 'No outgoing trades' : 'No trades match your filters'}
 				</p>
 			</div>
 		{:else}
@@ -485,7 +497,7 @@
 						<!-- Action Buttons -->
 						{#if trade.status === 'pending'}
 							<div class="mt-3 flex items-center gap-2 border-t border-gray-800 pt-3">
-								{#if activeTab === 'incoming' || !trade.offered_by}
+								{#if trade.offered_to === myIdentifier}
 									<button
 										type="button"
 										onclick={() => handleAccept(trade.id)}

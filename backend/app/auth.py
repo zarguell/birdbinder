@@ -93,10 +93,12 @@ def get_user_from_cf_jwt(token: str) -> str | None:
 
     Modes:
     - CF_VERIFY_JWT=false (default): Decode without verification.
-      CF already validated the token before forwarding it.
+      CF already validated the token before forwarding it — only safe when
+      the app is ONLY reachable through Cloudflare Access.
     - CF_VERIFY_JWT=true: Full RS256 signature verification using
-      CF's public keys, plus iss/aud claim checks. Falls back to
-      unverified decode if certs are unavailable (graceful degradation).
+      CF's public keys, plus iss/aud claim checks. Fails closed: if the
+      signature is invalid or no public key is available, the token is
+      rejected (returns None).
     """
     if settings.cf_verify_jwt:
         return _verify_cf_jwt(token)
@@ -104,7 +106,7 @@ def get_user_from_cf_jwt(token: str) -> str | None:
 
 
 def _verify_cf_jwt(token: str) -> str | None:
-    """Verify CF Access JWT signature + claims."""
+    """Verify CF Access JWT signature + claims. Fails closed on any error."""
     keys = _fetch_cf_public_keys()
 
     # Get the key ID from the JWT header
@@ -114,32 +116,28 @@ def _verify_cf_jwt(token: str) -> str | None:
     except JWTError:
         kid = None
 
-    if kid and kid in keys:
-        pem = keys[kid]
-        expected_iss = _get_cf_issuer()
-        decode_options = {"verify_signature": True}
-        if not settings.cf_aud_tag:
-            decode_options["verify_aud"] = False
+    if not kid or kid not in keys:
+        logger.error(
+            "CF JWT rejected: no public key for kid=%s (have %d keys cached)",
+            kid, len(keys),
+        )
+        return None
 
-        try:
-            payload = jwt.decode(token, pem, options=decode_options, issuer=expected_iss, audience=settings.cf_aud_tag)
-            email = payload.get("email")
-            if settings.auth_debug:
-                logger.info("CF JWT verified (kid=%s): email=%s", kid, email)
-            return email
-        except JWTError as e:
-            if settings.auth_debug:
-                logger.warning("CF JWT verification failed (kid=%s): %s", kid, e)
-            # Fall back to unverified decode
-            logger.warning("CF JWT signature verification failed, falling back to unverified decode")
-            return _decode_cf_jwt_unverified(token)
-    else:
-        # No matching key — fetch might have failed or kid unknown
+    pem = keys[kid]
+    expected_iss = _get_cf_issuer()
+    decode_options = {"verify_signature": True}
+    if not settings.cf_aud_tag:
+        decode_options["verify_aud"] = False
+
+    try:
+        payload = jwt.decode(token, pem, options=decode_options, issuer=expected_iss, audience=settings.cf_aud_tag)
+        email = payload.get("email")
         if settings.auth_debug:
-            logger.warning("No CF public key found for kid=%s (have %d keys cached)", kid, len(keys))
-        # Graceful degradation: decode without verification
-        logger.warning("CF public key not available, falling back to unverified decode")
-        return _decode_cf_jwt_unverified(token)
+            logger.info("CF JWT verified (kid=%s): email=%s", kid, email)
+        return email
+    except JWTError as e:
+        logger.error("CF JWT signature verification failed (kid=%s): %s", kid, e)
+        return None
 
 
 def _decode_cf_jwt_unverified(token: str) -> str | None:

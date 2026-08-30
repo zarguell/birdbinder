@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.main import app
+from app.models.job import Job
 from app.models.sighting import Sighting
 
 TEST_API_KEY = "test-key-123"
@@ -422,3 +423,55 @@ async def test_update_location_partial(auth_client, db_session):
     data = resp.json()
     assert data["exif_lat"] == 40.0
     assert data["exif_lon"] == 0.0  # unchanged
+
+
+# --- GET /sightings/{id}/job (identification progress polling) ---
+
+
+@pytest.mark.asyncio
+async def test_get_sighting_job_returns_latest_job(auth_client, db_session):
+    from app.models.job import Job
+
+    sighting = Sighting(id=str(uuid.uuid4()), user_identifier=TEST_USER, status="pending")
+    db_session.add(sighting)
+    await db_session.flush()
+    old_job = Job(
+        id=str(uuid.uuid4()), type="identify", sighting_id=sighting.id,
+        status="failed", error="boom",
+    )
+    new_job = Job(
+        id=str(uuid.uuid4()), type="identify", sighting_id=sighting.id,
+        status="completed",
+    )
+    db_session.add_all([old_job, new_job])
+    await db_session.commit()
+
+    resp = await auth_client.get(f"/api/sightings/{sighting.id}/job")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["job"]["id"] == new_job.id
+    assert data["job"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_get_sighting_job_none_when_no_job(auth_client, db_session):
+    sighting = Sighting(id=str(uuid.uuid4()), user_identifier=TEST_USER, status="pending")
+    db_session.add(sighting)
+    await db_session.commit()
+
+    resp = await auth_client.get(f"/api/sightings/{sighting.id}/job")
+    assert resp.status_code == 200
+    assert resp.json() == {"job": None}
+
+
+@pytest.mark.asyncio
+async def test_get_sighting_job_requires_ownership(auth_client, db_session):
+    other_user = "someone-else@example.com"
+    sighting = Sighting(id=str(uuid.uuid4()), user_identifier=other_user, status="pending")
+    db_session.add(sighting)
+    job = Job(id=str(uuid.uuid4()), type="identify", sighting_id=sighting.id, status="completed")
+    db_session.add(job)
+    await db_session.commit()
+
+    resp = await auth_client.get(f"/api/sightings/{sighting.id}/job")
+    assert resp.status_code == 404

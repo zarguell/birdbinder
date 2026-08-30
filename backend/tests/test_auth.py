@@ -225,11 +225,11 @@ def test_get_user_from_cf_jwt_invalid():
     assert result is None
 
 
-# --- 16. Verified JWT mode falls back to unverified when certs unavailable ---
+# --- 16. Verified JWT mode fails closed when certs unavailable ---
 
 
-def test_verify_mode_fallback_no_keys():
-    """When CF_VERIFY_JWT=true but certs endpoint unreachable, falls back."""
+def test_verify_mode_fails_closed_no_keys():
+    """When CF_VERIFY_JWT=true but certs endpoint unreachable, reject the token."""
     import json
     from unittest.mock import patch
     from app.auth import get_user_from_cf_jwt, _cf_keys_cache
@@ -245,7 +245,8 @@ def test_verify_mode_fallback_no_keys():
         # Simulate network failure
         mock_httpx.get.side_effect = Exception("network error")
         result = get_user_from_cf_jwt(token)
-    assert result == "test@example.com"
+    # Must fail closed — an unverifiable token must never authenticate
+    assert result is None
 
     # Clean up
     _cf_keys_cache.clear()
@@ -277,3 +278,33 @@ def test_verify_mode_with_aud_tag():
     assert mock_httpx.get.called
 
     _cf_keys_cache.clear()
+
+
+# --- 17. /storage media requires auth when auth is configured ---
+
+
+@pytest.mark.asyncio
+async def test_storage_media_requires_auth_when_configured(client):
+    """Auth middleware must reject anonymous media requests when keys configured."""
+    with patch("app.main.settings", parsed_api_keys=["test-key-123"], cf_access_enabled=False, auth_debug=False):
+        resp = await client.get("/storage/sightings/whatever.jpg")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_storage_media_open_in_local_mode(auth_client, monkeypatch):
+    """With no auth configured, media stays public (matches local-user API mode)."""
+    from types import SimpleNamespace
+
+    fake_settings = SimpleNamespace(
+        parsed_api_keys=[],
+        cf_access_enabled=False,
+        auth_debug=False,
+    )
+    monkeypatch.setattr("app.main.settings", fake_settings)
+    monkeypatch.setattr("app.dependencies.settings", fake_settings)
+
+    resp = await auth_client.get("/storage/does-not-exist.jpg")
+    # Not 401 — auth middleware must not block; downstream 404s (or index.html
+    # fallback) are fine, the assertion is that media access isn't denied
+    assert resp.status_code != 401

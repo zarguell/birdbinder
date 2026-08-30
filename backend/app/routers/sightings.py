@@ -2,11 +2,13 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import get_owned_or_404, paginated_owned_list
 from app.db import get_db
 from app.dependencies import get_current_user
+from app.models.job import Job
 from app.models.sighting import Sighting
 from app.models.enums import PoseVariant
 from app.schemas.sighting import SightingRead, SightingList, SightingOverride
@@ -258,9 +260,10 @@ async def get_sighting_job(
     db: AsyncSession = Depends(get_db),
 ):
     """Get the latest job status for a sighting (for polling identification progress)."""
+    sighting = await get_owned_or_404(db, Sighting, sighting_id, user, detail="Sighting not found")
     result = await db.execute(
         select(Job)
-        .where(Job.sighting_id == sighting_id, Job.type == "identify")
+        .where(Job.sighting_id == sighting.id, Job.type == "identify")
         .order_by(Job.created_at.desc())
         .limit(1)
     )

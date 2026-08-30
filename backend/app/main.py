@@ -1,9 +1,9 @@
 import logging
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pathlib import Path
 
 from app.config import settings
@@ -52,11 +52,40 @@ if not settings.parsed_api_keys and not settings.cf_access_enabled:
         "All requests will be accepted as 'local-user'. "
         "Do NOT use this configuration in production."
     )
+if settings.cf_access_enabled and not settings.cf_verify_jwt:
+    logger.warning(
+        "⚠ CF_ACCESS_ENABLED is true but CF_VERIFY_JWT is false: Cloudflare Access "
+        "JWTs are decoded WITHOUT signature verification. This is only safe if the "
+        "app is reachable exclusively through Cloudflare Access — any direct access "
+        "to this server bypasses auth entirely. Set CF_VERIFY_JWT=true to verify "
+        "signatures."
+    )
 
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.middleware("http")
+async def protect_storage_media(request, call_next):
+    """Require authentication for user-uploaded media when auth is configured.
+
+    <img> tags cannot send Authorization headers, but this is safe:
+    - Behind Cloudflare Access the browser sends the CF_Authorization cookie
+      on media requests automatically.
+    - With no auth configured (local mode) media stays open, matching the API.
+    - The API-key-only browser case already cannot use the SPA (API calls
+      would 401 first), so no working setup regresses.
+    """
+    if request.url.path.startswith("/storage") and (
+        settings.parsed_api_keys or settings.cf_access_enabled
+    ):
+        try:
+            await get_current_user(request)
+        except HTTPException:
+            return PlainTextResponse("Authentication required", status_code=401)
+    return await call_next(request)
 
 
 # Serve user-uploaded files (avatars, sightings photos, card art)
@@ -75,8 +104,10 @@ if static_dir.exists() and app_dir.exists():
     @app.get("/{path:path}")
     async def serve_spa(path: str):
         # Serve root-level static files (manifest.json, icons, robots.txt, etc.)
-        file = static_dir / path
-        if file.is_file():
+        # Resolve and contain within static_dir so encoded traversal can't escape
+        resolved_static = static_dir.resolve()
+        file = (static_dir / path).resolve()
+        if file.is_file() and file.is_relative_to(resolved_static):
             return FileResponse(file)
         # SPA fallback — let client-side router handle it
         return FileResponse(static_dir / "index.html")
