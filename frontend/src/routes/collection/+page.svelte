@@ -32,7 +32,8 @@
 	let data = $state<ProgressData | null>(null);
 	let viewMode = $state<'family' | 'grid'>('family');
 	let expandedFamily = $state<string | null>(null);
-	let eBirdStatus = $state<'checking' | 'live' | 'static'>('checking');
+	// Only 'live' after an explicit refresh — never probe the eBird API on page load
+	let eBirdStatus = $state<'live' | 'static'>('static');
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 	let searchQuery = $state('');
@@ -60,22 +61,6 @@
 			error = e.message || 'Failed to load collection data';
 		} finally {
 			loading = false;
-		}
-	}
-
-	async function checkEBirdStatus() {
-		eBirdStatus = 'checking';
-		try {
-			const res = await fetch('/api/collection/refresh-ebird', { method: 'POST' });
-			if (res.ok) {
-				eBirdStatus = 'live';
-				const result = await res.json();
-				showToast(`eBird refreshed: ${result.species_count} species`, 'success');
-			} else {
-				eBirdStatus = 'static';
-			}
-		} catch {
-			eBirdStatus = 'static';
 		}
 	}
 
@@ -157,9 +142,12 @@
 
 	$effect(() => {
 		loadProgress();
-		checkEBirdStatus();
 	});
 </script>
+
+<svelte:head>
+	<title>Collection · BirdBinder</title>
+</svelte:head>
 
 <div class="space-y-6">
 	<!-- Header -->
@@ -173,15 +161,7 @@
 			</div>
 			<div class="flex items-center gap-3">
 				<!-- eBird badge -->
-				{#if eBirdStatus === 'checking'}
-					<span class="inline-flex items-center gap-1.5 rounded-full bg-gray-800 border border-gray-700 px-3 py-1 text-xs text-gray-400">
-						<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-						</svg>
-						Checking eBird…
-					</span>
-				{:else if eBirdStatus === 'live'}
+				{#if eBirdStatus === 'live'}
 					<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-900/40 border border-emerald-700/50 px-3 py-1 text-xs text-emerald-300">
 						<span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
 						Live eBird

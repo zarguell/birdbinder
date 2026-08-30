@@ -1,3 +1,7 @@
+<svelte:head>
+	<title>Home · BirdBinder</title>
+</svelte:head>
+
 <h1 class="text-2xl font-bold">Welcome to BirdBinder</h1>
 <p class="mt-2 text-gray-400">Upload bird sightings, collect cards, complete sets.</p>
 <a

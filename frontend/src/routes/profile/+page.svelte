@@ -78,6 +78,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Profile · BirdBinder</title>
+</svelte:head>
+
 <div class="max-w-lg mx-auto">
 	<h1 class="text-2xl font-bold mb-6">Profile</h1>
 

@@ -94,6 +94,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{profile?.display_name ?? profile?.email ?? 'Profile'} · BirdBinder</title>
+</svelte:head>
+
 <div class="space-y-6">
 	<a href="/trades" class="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
 		<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

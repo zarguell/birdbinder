@@ -50,6 +50,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>{setData?.name ?? 'Set'} · BirdBinder</title>
+</svelte:head>
+
 <div class="space-y-6">
 	<!-- Back -->
 	<a href="/sets" class="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors">

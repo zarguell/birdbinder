@@ -93,6 +93,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{card?.species_common ?? 'Card'} · BirdBinder</title>
+</svelte:head>
+
 <div class="space-y-6">
 	{#if loading}
 		<div class="flex items-center justify-center py-16">

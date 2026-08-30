@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./data/birdbinder.db"
     storage_path: str = "./storage"
     ebird_api_key: Optional[str] = None
+    regen_art_daily_limit: int = 20  # per-user cap on card-art regenerations per UTC day
     git_sha: str = "dev"
 
     @property

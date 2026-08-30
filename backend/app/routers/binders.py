@@ -43,9 +43,18 @@ async def list_binders(
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await paginated_owned_list(db, Binder, user, limit, offset, order_field="updated_at")
+    # One grouped COUNT for all binders instead of a COUNT per binder
+    count_map: dict[str, int] = {}
+    if items:
+        rows = await db.execute(
+            select(BinderCard.binder_id, func.count())
+            .where(BinderCard.binder_id.in_([b.id for b in items]))
+            .group_by(BinderCard.binder_id)
+        )
+        count_map = {binder_id: n for binder_id, n in rows.all()}
     enriched = []
     for b in items:
-        cc = (await db.execute(select(func.count()).select_from(BinderCard).where(BinderCard.binder_id == b.id))).scalar() or 0
+        cc = count_map.get(b.id, 0)
         enriched.append(BinderRead.model_validate(b, from_attributes=True).model_copy(update={"card_count": cc}))
     return BinderList(items=enriched, total=total, limit=limit, offset=offset)
 

@@ -114,6 +114,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Upload Sighting · BirdBinder</title>
+</svelte:head>
+
 <div class="max-w-md mx-auto space-y-6">
 	<h1 class="text-2xl font-bold">Upload Sighting</h1>
 	<p class="text-gray-400 text-sm">Snap a photo or choose an image to identify a bird.</p>

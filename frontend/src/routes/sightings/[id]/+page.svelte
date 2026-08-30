@@ -307,6 +307,10 @@ async function handleIdentify() {
 	}
 </script>
 
+<svelte:head>
+	<title>{sighting?.species_common ?? 'Sighting'} · BirdBinder</title>
+</svelte:head>
+
 <div class="space-y-6">
 	<!-- Back link -->
 	<a href="/sightings" class="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">

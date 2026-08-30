@@ -80,9 +80,39 @@ async def regenerate_card_art(
     db: AsyncSession = Depends(get_db),
 ):
     """Regenerate card art for an existing card."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import func
+
+    from app.config import settings
+    from app.models.job import Job
     from app.services.card_gen import start_card_art_regeneration
 
     card = await get_owned_or_404(db, Card, card_id, user, detail="Card not found")
+
+    # Per-user daily quota — each regeneration bills an image generation
+    start_of_day = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    used = (
+        await db.execute(
+            select(func.count())
+            .select_from(Job)
+            .where(
+                Job.user_identifier == user,
+                Job.type == "regenerate_art",
+                Job.created_at >= start_of_day,
+            )
+        )
+    ).scalar() or 0
+    if used >= settings.regen_art_daily_limit:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Daily art regeneration limit reached ({settings.regen_art_daily_limit}/day). "
+                "Try again tomorrow."
+            ),
+        )
 
     prompt_hint = None
     style_override = None

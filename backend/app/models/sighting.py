@@ -45,7 +45,8 @@ class Sighting(Base):
         "Card", back_populates="sighting", lazy="selectin",
         cascade="all, delete-orphan",
     )
+    # Not exposed via the API — loaded on demand instead of on every read
     jobs: Mapped[list["Job"]] = relationship(  # noqa: F821
-        "Job", back_populates="sighting", lazy="selectin",
+        "Job", back_populates="sighting",
         cascade="all, delete-orphan",
     )

@@ -1,3 +1,13 @@
+import type { components } from './api-types';
+
+// Entity types generated from the backend OpenAPI schema (src/lib/api-types.d.ts)
+export type Binder = components['schemas']['BinderRead'];
+export type Card = components['schemas']['CardRead'];
+export type CardSet = components['schemas']['CardSetRead'];
+export type Sighting = components['schemas']['SightingRead'];
+export type Trade = components['schemas']['TradeRead'];
+export type BinderCard = components['schemas']['BinderCardRead'];
+
 const API_BASE = '/api';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -38,7 +48,7 @@ function qs(params?: Record<string, string | number | undefined | null>): string
 
 type PaginatedResponse<T> = { items: T[]; total: number; limit: number; offset: number };
 
-function crud<T = any>(path: string) {
+function crud<T>(path: string) {
 	return {
 		list: (params?: Record<string, string | number | undefined>) =>
 			request<PaginatedResponse<T>>(`/${path}${qs(params)}`),
@@ -97,7 +107,7 @@ export const species = {
 };
 
 export const cards = {
-	...crud<any>('cards'),
+	...crud<Card>('cards'),
 	generate: (sightingId: string) =>
 		request<any>(`/cards/generate/${sightingId}`, { method: 'POST' }),
 	regenerateArt: (cardId: string, promptHint?: string, styleOverride?: string) =>
@@ -111,7 +121,7 @@ export const cards = {
 };
 
 export const binders = {
-	...crud<any>('binders'),
+	...crud<Binder>('binders'),
 	addCard: (binderId: string, cardId: string) =>
 		request<any>(`/binders/${binderId}/cards`, {
 			method: 'POST',
@@ -122,12 +132,12 @@ export const binders = {
 };
 
 export const sets = {
-	...crud<any>('sets'),
+	...crud<CardSet>('sets'),
 	progress: (id: string) => request<any>(`/sets/${id}/progress`),
 };
 
 export const trades = {
-	...crud<any>('trades'),
+	...crud<Trade>('trades'),
 	accept: (id: string) => request<any>(`/trades/${id}/accept`, { method: 'POST' }),
 	decline: (id: string) => request<any>(`/trades/${id}/decline`, { method: 'POST' }),
 	cancel: (id: string) => request<any>(`/trades/${id}/cancel`, { method: 'POST' }),

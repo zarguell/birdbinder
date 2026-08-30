@@ -78,7 +78,7 @@
 						<span class="text-xs">{displayName(userInfo.user_identifier, userInfo.display_name)}</span>
 					</a>
 				{:else}
-					<span class="text-xs text-red-400 border-l border-gray-700 pl-3">⚠ no auth</span>
+					<span class="text-xs text-gray-500 border-l border-gray-700 pl-3">Not signed in</span>
 				{/if}
 			</div>
 

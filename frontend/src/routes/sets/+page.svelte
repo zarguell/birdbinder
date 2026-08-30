@@ -72,6 +72,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Sets · BirdBinder</title>
+</svelte:head>
+
 <div class="space-y-6">
 	<!-- Header -->
 	<div class="flex items-center justify-between">
