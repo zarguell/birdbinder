@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { profile } from '$lib/api';
 	import { onMount } from 'svelte';
+	import { formatDate } from '$lib/utils';
+	import { setUser, userStore } from '$lib/stores/user.svelte';
 
 	let email = $state('');
 	let displayName = $state('');
@@ -32,8 +34,8 @@
 			const data = await profile.update({ display_name: displayName || undefined });
 			displayName = data.display_name || '';
 			message = { type: 'success', text: 'Profile updated!' };
-			// Update nav bar by refreshing auth/me
-			await fetch('/api/auth/me', { credentials: 'include' }).catch(() => {});
+			// Update the nav bar through the shared user store
+			if (userStore.user) setUser({ ...userStore.user, display_name: data.display_name });
 		} catch (e: any) {
 			message = { type: 'error', text: e.message || 'Failed to save' };
 		} finally {
@@ -57,8 +59,8 @@
 			const data = await profile.uploadAvatar(file);
 			avatarPath = data.avatar_path;
 			message = { type: 'success', text: 'Avatar updated!' };
-			// Refresh nav bar
-			await fetch('/api/auth/me', { credentials: 'include' }).catch(() => {});
+			// Update the nav bar through the shared user store
+			if (userStore.user) setUser({ ...userStore.user, avatar_path: data.avatar_path });
 		} catch (e: any) {
 			message = { type: 'error', text: e.message || 'Failed to upload avatar' };
 		} finally {
@@ -67,10 +69,6 @@
 		}
 	}
 
-	function formatDate(iso: string | null) {
-		if (!iso) return '';
-		return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-	}
 
 	function avatarUrl() {
 		if (!avatarPath) return null;
@@ -112,7 +110,7 @@
 					<p class="text-lg font-semibold">{displayName || email.split('@')[0]}</p>
 					<p class="text-sm text-gray-400">{email}</p>
 					{#if createdAt}
-						<p class="text-xs text-gray-500 mt-1">Joined {formatDate(createdAt)}</p>
+						<p class="text-xs text-gray-500 mt-1">Joined {formatDate(createdAt, 'date-long')}</p>
 					{/if}
 				</div>
 			</div>

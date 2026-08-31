@@ -7,9 +7,6 @@ Since we don't have real observation frequency data, we use:
 3. Deterministic hash-based shifting within tier neighborhoods
 """
 
-import json
-from pathlib import Path
-
 __all__ = ["TIER_WEIGHTS", "get_rarity_tier", "TIERS"]
 
 # Ordered from most to least common
@@ -61,9 +58,9 @@ def _load_family_rarity_map() -> dict[str, str]:
     if _family_rarity_map is not None:
         return _family_rarity_map
 
-    data_path = Path(__file__).parent.parent / "data" / "birds.json"
-    with open(data_path) as f:
-        birds = json.load(f)
+    from app.services import taxonomy
+
+    birds = taxonomy.get_birds()
 
     # Count species per family
     family_counts: dict[str, int] = {}
@@ -92,9 +89,9 @@ def _load_species_family_map() -> dict[str, str]:
     if _species_family_map is not None:
         return _species_family_map
 
-    data_path = Path(__file__).parent.parent / "data" / "birds.json"
-    with open(data_path) as f:
-        birds = json.load(f)
+    from app.services import taxonomy
+
+    birds = taxonomy.get_birds()
 
     _species_family_map = {
         b["species_code"]: b["family"]

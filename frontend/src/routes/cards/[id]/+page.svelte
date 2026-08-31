@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { cards, jobs } from '$lib/api';
+import { formatDate } from '$lib/utils';
+	import { rarityBadgeClass } from '$lib/rarity';
 
 	let card = $state<any>(null);
 	let loading = $state(true);
@@ -11,7 +13,7 @@
 	let regenError = $state('');
 	let regenPollInterval: ReturnType<typeof setInterval> | null = null;
 
-	let id = $derived($page.params.id);
+	let id = $derived(page.params.id ?? '');
 
 	async function loadCard() {
 		loading = true;
@@ -66,31 +68,7 @@
 		}
 	}
 
-	function formatDate(dateStr: string): string {
-		try {
-			return new Date(dateStr).toLocaleDateString('en-US', {
-				weekday: 'short',
-				month: 'short',
-				day: 'numeric',
-				year: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit'
-			});
-		} catch {
-			return dateStr;
-		}
-	}
 
-	function rarityColor(rarity: string | undefined): string {
-		switch (rarity) {
-			case 'common': return 'bg-gray-500/15 text-gray-400 border-gray-500/30';
-			case 'uncommon': return 'bg-green-500/15 text-green-400 border-green-500/30';
-			case 'rare': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-			case 'epic': return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
-			case 'legendary': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
-			default: return 'bg-gray-500/15 text-gray-400 border-gray-500/30';
-		}
-	}
 </script>
 
 <svelte:head>
@@ -209,7 +187,7 @@
 					{/if}
 					{#if card.rarity_tier}
 						<div class="mt-3">
-							<span class="inline-block rounded-full border px-3 py-1 text-sm font-medium {rarityColor(card.rarity_tier)}">
+							<span class="inline-block rounded-full border px-3 py-1 text-sm font-medium {rarityBadgeClass(card.rarity_tier)}">
 								{card.rarity_tier}
 							</span>
 						</div>
@@ -229,7 +207,7 @@
 					{#if card.generated_at}
 						<div class="flex justify-between">
 							<dt class="text-gray-500">Generated</dt>
-							<dd class="text-gray-200">{formatDate(card.generated_at)}</dd>
+							<dd class="text-gray-200">{formatDate(card.generated_at, 'datetime')}</dd>
 						</div>
 					{/if}
 					{#if card.art_model}
@@ -256,29 +234,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	.holo-shimmer::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		z-index: 10;
-		pointer-events: none;
-		background: linear-gradient(
-			115deg,
-			transparent 20%,
-			rgba(255, 255, 255, 0.06) 36%,
-			rgba(255, 255, 255, 0.12) 40%,
-			rgba(255, 255, 255, 0.06) 44%,
-			transparent 60%
-		);
-		background-size: 200% 100%;
-		animation: holo-sweep 3s ease-in-out infinite;
-		mix-blend-mode: overlay;
-	}
-
-	@keyframes holo-sweep {
-		0% { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
-	}
-</style>

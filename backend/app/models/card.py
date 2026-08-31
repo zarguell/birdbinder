@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Integer, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -26,7 +26,6 @@ class Card(Base):
         String(20), default=PoseVariant.other.value
     )
     rarity_tier: Mapped[str] = mapped_column(String(20), default="common")
-    set_ids: Mapped[list] = mapped_column(JSON, default=list)
     card_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     card_art_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     id_method: Mapped[str] = mapped_column(String(20), default="ai")

@@ -1,12 +1,12 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/state';
-	import { auth } from '$lib/api';
+	import { userStore, loadUser } from '$lib/stores/user.svelte';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
-	let userInfo: { user_identifier: string; display_name: string | null; avatar_path: string | null; auth_source: string } | null = $state(null);
 	let mobileMenuOpen = $state(false);
+	const userInfo = $derived(userStore.user);
 
 	const navLinks = [
 		{ href: '/upload', label: 'Upload' },
@@ -25,12 +25,8 @@
 		mobileMenuOpen = false;
 	});
 
-	onMount(async () => {
-		try {
-			userInfo = await auth.me();
-		} catch {
-			userInfo = null;
-		}
+	onMount(() => {
+		loadUser();
 	});
 
 	function isActive(href: string) {

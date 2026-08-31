@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { sightings } from '$lib/api';
+import { formatDate } from '$lib/utils';
 
 	let items = $state<any[]>([]);
 	let total = $state(0);
@@ -42,17 +43,6 @@
 		}
 	}
 
-	function formatDate(dateStr: string): string {
-		try {
-			return new Date(dateStr).toLocaleDateString('en-US', {
-				month: 'short',
-				day: 'numeric',
-				year: 'numeric'
-			});
-		} catch {
-			return dateStr;
-		}
-	}
 
 	function statusBadge(status: string) {
 		switch (status) {
@@ -158,9 +148,9 @@
 						</div>
 						<p class="text-sm text-gray-500 mt-0.5">
 							{#if sighting.observed_at}
-								{formatDate(sighting.observed_at)}
+								{formatDate(sighting.observed_at, 'date')}
 							{:else}
-								{formatDate(sighting.created_at)}
+								{formatDate(sighting.created_at, 'date')}
 							{/if}
 						</p>
 					</div>

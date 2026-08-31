@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { trades, cards, users, auth, ApiError } from '$lib/api';
+import { formatDate } from '$lib/utils';
 
 	let allTrades = $state<any[]>([]);
 	let tradeableCards = $state<any[]>([]);
@@ -138,14 +139,6 @@
 		return list;
 	}
 
-	function formatDate(dateStr: string) {
-		return new Date(dateStr).toLocaleDateString(undefined, {
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
 
 	async function handleAccept(id: string) {
 		try {
@@ -234,7 +227,7 @@
 		loadTradeableCards();
 		loadUsers();
 
-		const toParam = $page.url.searchParams.get('to');
+		const toParam = page.url.searchParams.get('to');
 		if (toParam) {
 			formRecipient = toParam;
 			showCreateForm = true;
@@ -510,7 +503,7 @@
 								<span class="rounded-full border px-2.5 py-0.5 text-xs font-semibold {statusColors[trade.status] ?? 'bg-gray-800 text-gray-400 border-gray-700'}">
 									{trade.status}
 								</span>
-								<span class="text-xs text-gray-500">{formatDate(trade.created_at)}</span>
+								<span class="text-xs text-gray-500">{formatDate(trade.created_at, 'datetime')}</span>
 							</div>
 							<span class="text-xs text-gray-500">
 								{#if trade.offered_by}

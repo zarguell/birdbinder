@@ -84,6 +84,8 @@ export const sightings = {
 			return res.json();
 		});
 	},
+	identify: (id: string) =>
+		request<{ job_id: string; status: string }>(`/sightings/${id}/identify`, { method: 'POST' }),
 	delete: (id: string) =>
 		request<void>(`/sightings/${id}`, { method: 'DELETE' }),
 	update: (id: string, data: Record<string, unknown>) =>
@@ -176,6 +178,11 @@ export const collection = {
 		if (params?.family_group) q.set('family_group', 'true');
 		return request<any>(`/collection/progress?${q}`);
 	},
+	refreshEBird: () =>
+		request<{ status: string; region: string; species_count: number }>(
+			'/collection/refresh-ebird',
+			{ method: 'POST' }
+		),
 };
 
 // Users

@@ -217,12 +217,11 @@ async def test_regenerate_art_daily_quota(auth_client, db_session):
 
 async def test_regenerate_art_quota_counts_todays_jobs(auth_client, db_session):
     """Jobs from today count toward the quota; the endpoint enforces the limit."""
-    from datetime import timedelta
-
     from app.config import settings
     from app.models.job import Job
 
     card = _make_card(db_session)
+    # created_at defaults to now — always inside today's UTC window
     db_session.add(
         Job(
             id=str(uuid.uuid4()),
@@ -230,7 +229,6 @@ async def test_regenerate_art_quota_counts_todays_jobs(auth_client, db_session):
             sighting_id=card.sighting_id,
             user_identifier=TEST_USER,
             status="completed",
-            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
         )
     )
     await db_session.commit()

@@ -122,20 +122,10 @@ def _run_identification(job_id: str, sighting_id: str, image_path: str):
             sighting.id_model = model_override or settings.ai_model
 
             # Reverse lookup species_code from common_name or scientific_name
-            def _load_birds_data():
-                from pathlib import Path
-                import json
-                path = Path(__file__).parent.parent / "data" / "birds.json"
-                with open(path) as f:
-                    return json.load(f)
-
             common = result.get("common_name", "")
             scientific = result.get("scientific_name", "")
-            birds = _load_birds_data()
-            matched = next(
-                (b for b in birds if b["common_name"] == common or b["scientific_name"] == scientific),
-                None
-            )
+            from app.services import taxonomy
+            matched = taxonomy.find_species(common_name=common, scientific_name=scientific)
             if matched:
                 sighting.species_code = matched["species_code"]
             else:

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { sets, ApiError } from '$lib/api';
 	import CompletionBar from '$lib/components/CompletionBar.svelte';
 	import MissingCards from '$lib/components/MissingCards.svelte';
@@ -11,7 +11,7 @@
 	let deleting = $state(false);
 	let deleteError = $state('');
 
-	const set_id = $derived($page.params.id);
+	const set_id = $derived(page.params.id ?? '');
 
 	async function loadData() {
 		loading = true;
@@ -45,7 +45,7 @@
 	}
 
 	$effect(() => {
-		const id = $page.params.id;
+		const id = page.params.id;
 		if (id) loadData();
 	});
 </script>

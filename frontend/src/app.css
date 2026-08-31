@@ -1,1 +1,66 @@
 @import 'tailwindcss';
+
+/* Design tokens — single source of truth for brand + surface colors.
+   Consumed as Tailwind utilities (bg-brand, text-brand, bg-surface-2…).
+   Pages still using raw gray/green classes migrate incrementally. */
+@theme {
+	--color-brand: #16a34a; /* green-600 */
+	--color-brand-strong: #22c55e; /* green-500 */
+	--color-brand-deep: #15803d; /* green-700 */
+	--color-surface: #030712; /* gray-950 */
+	--color-surface-2: #111827; /* gray-900 */
+	--color-surface-3: #1f2937; /* gray-800 */
+}
+
+/* Shared button styles — previously ~30 copies of the same class strings */
+@layer components {
+	.btn-primary {
+		@apply rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50;
+	}
+	.btn-secondary {
+		@apply rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50;
+	}
+	.btn-danger {
+		@apply rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-950/60;
+	}
+	.input-dark {
+		@apply w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/50;
+	}
+}
+
+/* Base focus visibility for keyboard users — hover states had no equivalent */
+:focus-visible {
+	outline: 2px solid #22c55e;
+	outline-offset: 2px;
+}
+
+/* Holo shimmer overlay for rare+ cards. The element must establish a
+   positioning context (relative/absolute). Single canonical definition —
+   was copy-pasted into four components with slight drift. */
+.holo-shimmer::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	pointer-events: none;
+	background: linear-gradient(
+		115deg,
+		transparent 20%,
+		rgba(255, 255, 255, 0.06) 36%,
+		rgba(255, 255, 255, 0.12) 40%,
+		rgba(255, 255, 255, 0.06) 44%,
+		transparent 60%
+	);
+	background-size: 200% 100%;
+	animation: holo-sweep 3s ease-in-out infinite;
+	mix-blend-mode: overlay;
+}
+
+@keyframes holo-sweep {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}

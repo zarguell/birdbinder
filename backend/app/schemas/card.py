@@ -15,7 +15,6 @@ class CardRead(BaseModel):
     family: str | None
     pose_variant: str
     rarity_tier: str
-    set_ids: list
     card_number: int | None
     card_art_url: str | None
     id_method: str

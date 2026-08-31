@@ -9,11 +9,7 @@
 {:else}
 	<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4">
 		{#each cards as card (card.id)}
-			<svelte:component
-				this={CardComponent}
-				{card}
-				{onselect}
-			/>
+			<CardComponent {card} {onselect} />
 		{/each}
 	</div>
 {/if}

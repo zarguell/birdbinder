@@ -110,23 +110,22 @@ async def test_create_card(session: AsyncSession):
     assert result.pose_variant == "perching"
     assert result.id_confidence == 0.95
     assert result.duplicate_count == 1
-    assert result.set_ids == []
 
 
 @pytest.mark.asyncio
-async def test_card_json_fields(session: AsyncSession):
+async def test_card_defaults(session: AsyncSession):
     c = Card(
         id=str(uuid.uuid4()),
         user_identifier="user@example.com",
         species_common="Blue Jay",
         species_code="blujay",
-        set_ids=["set-uuid-1", "set-uuid-2"],
     )
     session.add(c)
     await session.commit()
 
     result = await session.get(Card, c.id)
-    assert result.set_ids == ["set-uuid-1", "set-uuid-2"]
+    assert result.tradeable is True
+    assert result.duplicate_count == 1
 
 
 # ── Sighting ↔ Card relationship ─────────────────────────────────────────

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { collection, ApiError } from '$lib/api';
+	import { collection } from '$lib/api';
 
 	type Species = {
 		species_code: string;
@@ -66,18 +66,12 @@
 
 	async function refreshEBird() {
 		try {
-			const res = await fetch('/api/collection/refresh-ebird', { method: 'POST' });
-			if (res.ok) {
-				const result = await res.json();
-				eBirdStatus = 'live';
-				showToast(`eBird refreshed: ${result.species_count} species`, 'success');
-			} else {
-				const body = await res.json().catch(() => ({ detail: 'Failed' }));
-				eBirdStatus = 'static';
-				showToast(body.detail || 'eBird refresh failed', 'error');
-			}
-		} catch {
-			showToast('Network error', 'error');
+			const result = await collection.refreshEBird();
+			eBirdStatus = 'live';
+			showToast(`eBird refreshed: ${result.species_count} species`, 'success');
+		} catch (e: any) {
+			eBirdStatus = 'static';
+			showToast(e?.message || 'eBird refresh failed', 'error');
 		}
 	}
 

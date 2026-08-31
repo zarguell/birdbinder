@@ -2,7 +2,7 @@ import logging
 import time
 
 import httpx
-from jose import jwt, JWTError
+import jwt
 
 from app.config import settings
 
@@ -51,12 +51,16 @@ def _fetch_cf_public_keys() -> dict[str, str]:
         kid = key_data.get("kid")
         if not kid:
             continue
-        # Convert JWK to PEM using jose
+        # Convert JWK to PEM
         try:
-            from jose.utils import base64url_decode
+            import base64 as _b64
+
+            def _b64url_decode(value: str) -> bytes:
+                return _b64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
             # Build PEM from RSA components
-            n = base64url_decode(key_data["n"])
-            e = base64url_decode(key_data["e"])
+            n = _b64url_decode(key_data["n"])
+            e = _b64url_decode(key_data["e"])
             from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
             from cryptography.hazmat.primitives import serialization
             pub_numbers = RSAPublicNumbers(
@@ -113,7 +117,7 @@ def _verify_cf_jwt(token: str) -> str | None:
     try:
         unverified = jwt.get_unverified_header(token)
         kid = unverified.get("kid")
-    except JWTError:
+    except jwt.InvalidTokenError:
         kid = None
 
     if not kid or kid not in keys:
@@ -130,12 +134,19 @@ def _verify_cf_jwt(token: str) -> str | None:
         decode_options["verify_aud"] = False
 
     try:
-        payload = jwt.decode(token, pem, options=decode_options, issuer=expected_iss, audience=settings.cf_aud_tag)
+        payload = jwt.decode(
+            token,
+            pem,
+            algorithms=["RS256"],
+            options=decode_options,
+            issuer=expected_iss,
+            audience=settings.cf_aud_tag,
+        )
         email = payload.get("email")
         if settings.auth_debug:
             logger.info("CF JWT verified (kid=%s): email=%s", kid, email)
         return email
-    except JWTError as e:
+    except jwt.InvalidTokenError as e:
         logger.error("CF JWT signature verification failed (kid=%s): %s", kid, e)
         return None
 
@@ -143,13 +154,13 @@ def _verify_cf_jwt(token: str) -> str | None:
 def _decode_cf_jwt_unverified(token: str) -> str | None:
     """Decode CF Access JWT without signature verification."""
     try:
-        payload = jwt.decode(token, key="", options={"verify_signature": False, "verify_aud": False})
+        payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
         email = payload.get("email")
         if settings.auth_debug:
             logger.info("CF JWT decoded (unverified): email=%s", email)
             logger.info("JWT claims: %s", {k: v for k, v in payload.items() if k != "email"})
         return email
-    except JWTError as e:
+    except jwt.InvalidTokenError as e:
         if settings.auth_debug:
             logger.warning("CF JWT decode failed: %s", e)
         return None

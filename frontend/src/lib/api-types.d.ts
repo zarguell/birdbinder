@@ -930,8 +930,6 @@ export interface components {
             pose_variant: string;
             /** Rarity Tier */
             rarity_tier: string;
-            /** Set Ids */
-            set_ids: unknown[];
             /** Card Number */
             card_number: number | null;
             /** Card Art Url */

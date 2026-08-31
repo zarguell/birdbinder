@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-# Module-level caches
+from app.services import taxonomy
+
+# Module-level cache
 _REGIONS_DATA: dict | None = None
-_BIRDS_DATA: list[dict] | None = None
-_BIRDS_BY_CODE: dict[str, dict] | None = None
 
 
 def _load_regions() -> dict:
@@ -16,16 +16,6 @@ def _load_regions() -> dict:
         with open(data_path) as f:
             _REGIONS_DATA = json.load(f)
     return _REGIONS_DATA
-
-
-def _load_birds() -> tuple[list[dict], dict[str, dict]]:
-    global _BIRDS_DATA, _BIRDS_BY_CODE
-    if _BIRDS_DATA is None:
-        data_path = Path(__file__).parent.parent / "data" / "birds.json"
-        with open(data_path) as f:
-            _BIRDS_DATA = json.load(f)
-        _BIRDS_BY_CODE = {b["species_code"]: b for b in _BIRDS_DATA}
-    return _BIRDS_DATA, _BIRDS_BY_CODE
 
 
 def get_available_regions() -> list[dict]:
@@ -49,7 +39,7 @@ def get_region_species(region_id: str) -> list[dict]:
     if region is None:
         raise ValueError(f"Unknown region: {region_id}")
 
-    _, birds_by_code = _load_birds()
+    birds_by_code = taxonomy.get_birds_by_code()
     species_list = []
     for code in region["species_codes"]:
         bird = birds_by_code.get(code)

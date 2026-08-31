@@ -201,7 +201,7 @@ async def test_auth_settings_no_secrets():
 
 def test_get_user_from_cf_jwt_valid():
     from app.auth import get_user_from_cf_jwt
-    from jose import jwt
+    import jwt
 
     # Create a real JWT with email (signature doesn't matter since we skip verification)
     token = jwt.encode({"email": "test@example.com", "sub": "123"}, "doesntmatter", algorithm="HS256")
@@ -211,7 +211,7 @@ def test_get_user_from_cf_jwt_valid():
 
 def test_get_user_from_cf_jwt_no_email():
     from app.auth import get_user_from_cf_jwt
-    from jose import jwt
+    import jwt
 
     token = jwt.encode({"sub": "123"}, "doesntmatter", algorithm="HS256")
     result = get_user_from_cf_jwt(token)
@@ -233,12 +233,12 @@ def test_verify_mode_fails_closed_no_keys():
     import json
     from unittest.mock import patch
     from app.auth import get_user_from_cf_jwt, _cf_keys_cache
-    from jose import jwt as jose_jwt
+    import jwt
 
     # Ensure cache is empty
     _cf_keys_cache.clear()
 
-    token = jose_jwt.encode({"email": "test@example.com", "sub": "123"}, "doesntmatter", algorithm="HS256")
+    token = jwt.encode({"email": "test@example.com", "sub": "123"}, "doesntmatter", algorithm="HS256")
 
     with patch("app.auth.settings", cf_verify_jwt=True, cf_team_domain="example-team", cf_aud_tag=None, auth_debug=False), \
          patch("app.auth.httpx") as mock_httpx:
@@ -257,11 +257,11 @@ def test_verify_mode_with_aud_tag():
     import json
     from unittest.mock import patch, MagicMock
     from app.auth import get_user_from_cf_jwt, _cf_keys_cache
-    from jose import jwt as jose_jwt
+    import jwt
 
     _cf_keys_cache.clear()
 
-    token = jose_jwt.encode({"email": "test@example.com", "sub": "123", "aud": "my-aud-tag"}, "doesntmatter", algorithm="HS256")
+    token = jwt.encode({"email": "test@example.com", "sub": "123", "aud": "my-aud-tag"}, "doesntmatter", algorithm="HS256")
 
     with patch("app.auth.settings", cf_verify_jwt=True, cf_team_domain="example-team", cf_aud_tag="my-aud-tag", auth_debug=False), \
          patch("app.auth.httpx") as mock_httpx, \

@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { sightings, cards, jobs, ApiError } from '$lib/api';
+	import { sightings, cards, jobs } from '$lib/api';
 	import SpeciesAutocomplete from '$lib/components/SpeciesAutocomplete.svelte';
 	import SpeciesSelector from '$lib/components/SpeciesSelector.svelte';
+import { formatDate } from '$lib/utils';
+	import { rarityTextColor } from '$lib/rarity';
 
 	let sighting = $state<any>(null);
 	let loading = $state(true);
@@ -26,7 +28,7 @@
 	let showSpeciesSelector = $state(false);
 	let regenCardIds = $state<Set<string>>(new Set());
 
-	let id = $derived($page.params.id);
+	let id = $derived(page.params.id ?? '');
 
 	function startPolling() {
 		stopPolling();
@@ -108,20 +110,6 @@
 		};
 	});
 
-	function formatDate(dateStr: string): string {
-		try {
-			return new Date(dateStr).toLocaleDateString('en-US', {
-				weekday: 'short',
-				month: 'short',
-				day: 'numeric',
-				year: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit'
-			});
-		} catch {
-			return dateStr;
-		}
-	}
 
 	function formatCoord(val: number | null | undefined, dir: string): string {
 		if (val == null) return '—';
@@ -136,8 +124,7 @@ async function handleIdentify() {
 		actionMessage = '';
 		jobStatus = null;
 		try {
-			const res = await fetch(`/api/sightings/${id}/identify`, { method: 'POST' });
-			if (!res.ok) throw new ApiError(res.status, await res.text());
+			await sightings.identify(id);
 			// Reload to pick up pending status, then start polling
 			await loadSighting();
 			startPolling();
@@ -413,7 +400,7 @@ async function handleIdentify() {
 					<div class="flex justify-between">
 						<dt class="text-gray-500">Date</dt>
 						<dd class="text-gray-200 text-right">
-							{sighting.observed_at ? formatDate(sighting.observed_at) : formatDate(sighting.created_at)}
+							{sighting.observed_at ? formatDate(sighting.observed_at, 'date') : formatDate(sighting.created_at, 'date')}
 						</dd>
 					</div>
 				</dl>
@@ -648,12 +635,7 @@ async function handleIdentify() {
 								<div class="min-w-0">
 									<p class="text-sm font-medium truncate">{card.species_common ?? 'Card'}</p>
 									{#if card.rarity_tier}
-										<span class="text-xs font-medium
-											{card.rarity_tier === 'common' ? 'text-gray-400' :
-											 card.rarity_tier === 'uncommon' ? 'text-green-400' :
-											 card.rarity_tier === 'rare' ? 'text-blue-400' :
-											 card.rarity_tier === 'epic' ? 'text-purple-400' :
-											 'text-yellow-400'}">
+										<span class="text-xs font-medium {rarityTextColor(card.rarity_tier)}">
 											{card.rarity_tier}
 										</span>
 									{/if}
@@ -679,29 +661,3 @@ async function handleIdentify() {
 		{/if}
 	{/if}
 </div>
-
-<style>
-	.holo-shimmer::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		z-index: 10;
-		pointer-events: none;
-		background: linear-gradient(
-			115deg,
-			transparent 20%,
-			rgba(255, 255, 255, 0.06) 36%,
-			rgba(255, 255, 255, 0.12) 40%,
-			rgba(255, 255, 255, 0.06) 44%,
-			transparent 60%
-		);
-		background-size: 200% 100%;
-		animation: holo-sweep 3s ease-in-out infinite;
-		mix-blend-mode: overlay;
-	}
-
-	@keyframes holo-sweep {
-		0% { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
-	}
-</style>

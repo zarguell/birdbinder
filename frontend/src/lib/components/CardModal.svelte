@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { cards, binders } from '$lib/api';
+	import { getRarityStyle } from '$lib/rarity';
+import { formatDate } from '$lib/utils';
 
 	let { card, onClose }: { card: any; onClose: () => void } = $props();
 
@@ -14,33 +16,7 @@
 	let deleteTimer: ReturnType<typeof setTimeout> | null = null;
 	let deleting = $state(false);
 
-	const rarityConfig: Record<string, { bg: string; text: string; label: string; border: string; glow: string }> = {
-		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common', border: 'border-gray-500/50', glow: '' },
-		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon', border: 'border-green-500/60', glow: 'shadow-green-500/10' },
-		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare', border: 'border-blue-400/60', glow: 'shadow-blue-500/15' },
-		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic', border: 'border-purple-400/60', glow: 'shadow-purple-500/15' },
-		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary', border: 'border-amber-400/70', glow: 'shadow-amber-400/20' }
-	};
-
-	function getRarity(tier: string) {
-		return rarityConfig[tier?.toLowerCase()] ?? rarityConfig.common;
-	}
-
-	const rarity = $derived(getRarity(card?.rarity_tier));
-
-	function formatDate(dateStr: string): string {
-		try {
-			return new Date(dateStr).toLocaleDateString('en-US', {
-				month: 'short',
-				day: 'numeric',
-				year: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit'
-			});
-		} catch {
-			return dateStr;
-		}
-	}
+	const rarity = $derived(getRarityStyle(card?.rarity_tier));
 
 	async function loadBinders() {
 		try {
@@ -216,19 +192,13 @@
 							{#if card.generated_at}
 								<div class="flex justify-between">
 									<dt class="text-gray-500">Generated</dt>
-									<dd class="text-gray-200">{formatDate(card.generated_at)}</dd>
+									<dd class="text-gray-200">{formatDate(card.generated_at, 'datetime')}</dd>
 								</div>
 							{/if}
 							{#if card.art_model}
 								<div class="flex justify-between">
 									<dt class="text-gray-500">Art Model</dt>
 									<dd class="text-gray-400 font-mono text-xs">{card.art_model}</dd>
-								</div>
-							{/if}
-							{#if card.set_ids?.length}
-								<div class="flex justify-between">
-									<dt class="text-gray-500">Sets</dt>
-									<dd class="text-gray-200">{card.set_ids.length} set{card.set_ids.length !== 1 ? 's' : ''}</dd>
 								</div>
 							{/if}
 							{#if card.tradeable}
@@ -335,7 +305,7 @@
 						{#if card.generated_at}
 							<div class="flex justify-between">
 								<dt class="text-gray-500">Submitted</dt>
-								<dd class="text-gray-200">{formatDate(card.generated_at)}</dd>
+								<dd class="text-gray-200">{formatDate(card.generated_at, 'datetime')}</dd>
 							</div>
 						{/if}
 
@@ -402,7 +372,7 @@
 						{#if card.sighting?.exif_datetime}
 							<div class="flex justify-between">
 								<dt class="text-gray-500">Photo Taken</dt>
-								<dd class="text-gray-200">{formatDate(card.sighting.exif_datetime)}</dd>
+								<dd class="text-gray-200">{formatDate(card.sighting.exif_datetime, 'datetime')}</dd>
 							</div>
 						{/if}
 					</dl>
@@ -436,29 +406,3 @@
 		</div>
 	</div>
 {/if}
-
-<style>
-	.holo-shimmer::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		z-index: 10;
-		pointer-events: none;
-		background: linear-gradient(
-			115deg,
-			transparent 20%,
-			rgba(255, 255, 255, 0.06) 36%,
-			rgba(255, 255, 255, 0.12) 40%,
-			rgba(255, 255, 255, 0.06) 44%,
-			transparent 60%
-		);
-		background-size: 200% 100%;
-		animation: holo-sweep 3s ease-in-out infinite;
-		mix-blend-mode: overlay;
-	}
-
-	@keyframes holo-sweep {
-		0% { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
-	}
-</style>

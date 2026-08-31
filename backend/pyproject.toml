@@ -13,11 +13,10 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "python-multipart>=0.0.20",
     "pillow>=12.3.0",
-    "openai>=1.60",
-    "python-jose[cryptography]>=3.3",
     "pillow-heif>=0.18",
     "huey>=2.5",
     "httpx>=0.28",
+    "pyjwt>=2.13.0",
 ]
 
 [project.optional-dependencies]

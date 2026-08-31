@@ -1,19 +1,10 @@
 <script lang="ts">
+	import { getRarityStyle } from '$lib/rarity';
+
 	let { card, onselect }: { card: any; onselect?: (card: any) => void } = $props();
 
-	const rarityConfig: Record<string, { bg: string; text: string; label: string; border: string; glow: string }> = {
-		common: { bg: 'bg-gray-600', text: 'text-gray-200', label: 'Common', border: 'border-gray-500/50', glow: '' },
-		uncommon: { bg: 'bg-green-700', text: 'text-green-100', label: 'Uncommon', border: 'border-green-500/60', glow: 'hover:shadow-green-500/20' },
-		rare: { bg: 'bg-blue-700', text: 'text-blue-100', label: 'Rare', border: 'border-blue-400/60', glow: 'hover:shadow-blue-500/25' },
-		epic: { bg: 'bg-purple-700', text: 'text-purple-100', label: 'Epic', border: 'border-purple-400/60', glow: 'hover:shadow-purple-500/25' },
-		legendary: { bg: 'bg-amber-600', text: 'text-amber-100', label: 'Legendary', border: 'border-amber-400/70', glow: 'hover:shadow-amber-400/30' }
-	};
 
-	function getRarity(tier: string) {
-		return rarityConfig[tier?.toLowerCase()] ?? rarityConfig.common;
-	}
-
-	const rarity = $derived(getRarity(card.rarity_tier));
+	const rarity = $derived(getRarityStyle(card.rarity_tier));
 </script>
 
 <button

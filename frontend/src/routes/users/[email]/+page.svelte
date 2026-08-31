@@ -1,7 +1,7 @@
 <script lang="ts">
-		import { page } from '$app/stores';
-		import { onMount } from 'svelte';
-		import { users } from '$lib/api';
+	import { page } from '$app/state';
+	import { users } from '$lib/api';
+	import { formatDate } from '$lib/utils';
 
 		let profile = $state<any>(null);
 		let loading = $state(true);
@@ -22,24 +22,17 @@
 			}
 		}
 
-		onMount(() => {
-			email = decodeURIComponent($page.params.email);
-			// Re-run on client-side navigation
-			const unsub = page.subscribe((p) => {
-				const newEmail = decodeURIComponent(p.params.email);
-				if (newEmail !== email) {
-					email = newEmail;
-					loadProfile();
-				}
-			});
-			loadProfile();
-			return unsub;
+		// Re-runs on client-side navigation between profiles
+		$effect(() => {
+			const param = page.params.email;
+			if (!param) return;
+			const newEmail = decodeURIComponent(param);
+			if (newEmail !== email) {
+				email = newEmail;
+				loadProfile();
+			}
 		});
 
-	function formatDate(iso: string | null): string {
-		if (!iso) return '';
-		return new Date(iso).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-	}
 
 	function formatRelativeTime(iso: string): string {
 		const now = Date.now();
@@ -150,7 +143,7 @@
 							</span>
 						{/if}
 						{#if profile.created_at}
-							<p class="text-xs text-gray-500 mt-1.5">Joined {formatDate(profile.created_at)}</p>
+							<p class="text-xs text-gray-500 mt-1.5">Joined {formatDate(profile.created_at, 'month-year')}</p>
 						{/if}
 					</div>
 				</div>
